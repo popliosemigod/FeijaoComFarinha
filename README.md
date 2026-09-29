@@ -40,11 +40,24 @@ Quem para o robô é o corpo, contando o tempo desde o último comando de
 movimento. Nenhum dos dois lados precisa que o outro esteja correto para se
 comportar bem.
 
-## As placas já estão gravadas
+## O que está gravado nas placas, hoje
 
-`corpo` no ESP32-C3 e `cerebro_cam` na ESP32-CAM, com o firmware desta versão.
-**Depois da montagem não há nada de software a fazer** — ligou, funciona. O
-passo a passo, com um teste ao fim de cada etapa, está em
+`corpo` no ESP32-C3 está com o firmware desta versão — confirmado no boot.
+
+`cerebro_cam` na ESP32-CAM está com uma versão **anterior** ao console de teste
+por rede (commit `b8768cb`): as duas placas foram desconectadas no meio da
+sessão em que o console foi escrito, antes de regravar. **O código compila** —
+`pio run -e cerebro_cam`, zero avisos — mas "compila" não é "está na placa", e
+os dois não podem ser confundidos.
+
+**Antes de tirar o adaptador USB de vez**, grave esta versão:
+
+```powershell
+pio run -e cerebro_cam -t upload --upload-port <a porta da ESP32-CAM>
+```
+
+Depois disso, sim: **depois da montagem não há nada de software a fazer** —
+ligou, funciona. O passo a passo, com um teste ao fim de cada etapa, está em
 [`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md).
 
 Dois resistores de 10 kΩ não são opcionais: um no **EN das pontes** e outro no
@@ -129,6 +142,22 @@ microfone ocupam. O caminho todo está em
 | [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe e quatro propostas em aberto |
 | [04](docs/04-roteiro-de-bancada.md) | **roteiro de ensaios**, com as previsões escritas antes |
 | [05](docs/05-a-voz.md) | a escolha do serviço de voz — ainda não tomada |
+
+## Controle para testes — com ou sem cabo
+
+Pela serial (sempre disponível): abra o monitor a 115200 baud e digite uma
+tecla — `w a s d x` movem, `1`/`2` os servos, `t` a rotina completa, `?` o
+estado. Lista inteira em
+[`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md#cartão-de-bolso--o-console-do-cérebro).
+
+Pela rede, sem cabo nenhum: preencha `WIFI_SSID`/`WIFI_SENHA` em
+`include/secrets.h` (copiado de `secrets.example.h`) e o robô sobe com um
+console de teste em `telnet <ip> 23` — as mesmas teclas, mesmo comportamento.
+Detalhe em
+[`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md#o-mesmo-console-sem-cabo).
+
+Isto é para **teste manual**, não para operação normal: não há autenticação, e
+é a mesma decisão que a ponte do Jaspy já toma na LAN de casa.
 
 ## Em aberto
 

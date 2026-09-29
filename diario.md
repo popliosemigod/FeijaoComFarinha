@@ -251,3 +251,50 @@ As duas placas estão gravadas com o firmware final: `corpo` no ESP32-C3,
 ligou, funciona. O passo a passo está em
 [`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md), com um teste ao
 fim de cada etapa e os motores deixados deliberadamente para o final.
+
+---
+
+## 2026-09-29 (3) — Um console pela rede, e uma pergunta sobre a placa nua
+
+Henrique perguntou duas coisas: se dá para tirar a parte de trás da ESP32-CAM
+(o adaptador com o conector micro USB) e alimentar a placa direto, e como
+controlar o robô para testes.
+
+A segunda respondeu a primeira: **hoje não existe nenhum caminho de rede no
+firmware.** Controle era só pela serial — e a serial é justamente o que some se
+o adaptador USB sair. Construir o console por Wi-Fi era o que faltava para as
+duas perguntas terem a mesma resposta boa: "sim, pode tirar, e ainda dá para
+testar sem ele".
+
+### O console por rede
+
+`src/console_rede.h`: um `WiFiServer` na porta 23 (telnet, sem nada para
+instalar), um cliente por vez, texto simples. A decisão de projeto que importa:
+**é a MESMA função `executaComando(Print&, char)` que a serial chama** — não
+existe "modo remoto" tratado à parte, que é justamente o tipo de duplicação que
+diverge em silêncio sem ninguém notar.
+
+Sem senha no protocolo, pela mesma razão que a ponte do Jaspy roda em claro na
+LAN: quem já está na rede de casa já controla o robô pela mesma porta que o
+cérebro usa para tudo o mais. Só ativa se `WIFI_SSID` estiver preenchido —
+sem credencial, o robô sobe do mesmo jeito, só sem esse console.
+
+### A interrupção que virou lição de honestidade
+
+No meio da implementação as duas placas desapareceram das portas COM —
+Henrique já estava desmontando a bancada. O firmware com o console novo
+**compila limpo**, mas nunca foi regravado na ESP32-CAM.
+
+Isso quebraria uma afirmação que eu tinha feito horas antes: "as placas já
+estão gravadas com o firmware final". Não estão mais — o `cerebro_cam` na placa
+é de um commit anterior. A correção foi no README, não escondida: uma seção
+inteira agora diz exatamente isso, e pede a regravação **antes** de tirar o
+adaptador USB de vez, porque depois disso não há outro jeito de gravar sem
+desmontar de novo.
+
+### Dois hooks bloqueados, e por que não é alarme
+
+`detect-private-key` e `gitleaks` falharam com `[WinError 4551] Uma política de
+Controle de Aplicativo bloqueou este arquivo` — o Windows impedindo o binário
+de rodar, não achando segredo nenhum. Conferido à mão: nenhuma credencial real
+entrou no diff, só os placeholders de sempre em `secrets.example.h`.

@@ -21,10 +21,12 @@
 //  de ficar mudo.
 // =====================================================================
 #include <Arduino.h>
+#include <WiFi.h>
 
 #include "audio.h"
 #include "camera.h"
 #include "config_cerebro.h"
+#include "console_rede.h"
 #include "corpo_link.h"
 #include "linha.h"
 #include "microfone.h"
@@ -38,6 +40,7 @@ cerebro::Audio alto_falante;
 cerebro::Microfone microfone;
 cerebro::Camera camera;
 cerebro::VozDeMentira voz;
+cerebro::ConsoleRede console_rede;
 
 bool tem_audio  = false;
 bool tem_mic    = false;
@@ -120,37 +123,95 @@ void tarefaTeste(void*) {
   vTaskDelete(nullptr);
 }
 
-void ajuda() {
-  Serial.println("\n--- console do cerebro ---");
-  Serial.println("  t          rotina de teste (anda, para, mexe os servos)");
-  Serial.println("  w a s d x  frente, esquerda, re, direita, parar");
-  Serial.println("  1 / 2      servo 1 / servo 2 para 45, depois 135");
-  Serial.println("  b          bipe no alto-falante");
-  Serial.println("  f          foto: mede um quadro da camera");
-  Serial.println("  p          despeja a foto em base64 pela serial");
-  Serial.println("  ?          estado de tudo");
+void ajuda(Print& saida) {
+  saida.println("\n--- console do cerebro (serial ou rede: e o mesmo) ---");
+  saida.println("  t          rotina de teste (anda, para, mexe os servos)");
+  saida.println("  w a s d x  frente, esquerda, re, direita, parar");
+  saida.println("  1 / 2      servo 1 / servo 2 para 45, depois 135");
+  saida.println("  b          bipe no alto-falante");
+  saida.println("  f          foto: mede um quadro da camera");
+  saida.println("  p          despeja a foto em base64");
+  saida.println("  ?          estado de tudo");
 }
 
-void estado() {
-  Serial.printf("\n=== %s v%s ===\n", CEREBRO_NOME, CEREBRO_VERSAO);
-  Serial.printf("corpo:       %s (%lu ms desde a ultima resposta)\n",
-                corpo.vivo() ? "respondendo" : "MUDO", (unsigned long)corpo.desde_resposta_ms());
-  Serial.printf("             %lu enviados, %lu respostas, %lu recusas\n",
-                (unsigned long)corpo.enviados(), (unsigned long)corpo.respostas(),
-                (unsigned long)corpo.erros());
+void estado(Print& saida) {
+  saida.printf("\n=== %s v%s ===\n", CEREBRO_NOME, CEREBRO_VERSAO);
+  saida.printf("corpo:       %s (%lu ms desde a ultima resposta)\n",
+               corpo.vivo() ? "respondendo" : "MUDO", (unsigned long)corpo.desde_resposta_ms());
+  saida.printf("             %lu enviados, %lu respostas, %lu recusas\n",
+               (unsigned long)corpo.enviados(), (unsigned long)corpo.respostas(),
+               (unsigned long)corpo.erros());
   // "FALHOU" e "nao existe nesta placa" sao coisas diferentes, e o
   // diagnostico so serve se disser qual das duas e. Numa placa sem
   // amplificador, "FALHOU" manda procurar defeito onde nao ha nada.
-  Serial.printf("alto-falante:%s\n",
-                tem_audio ? " ok" : (TEM_AMPLIFICADOR ? " FALHOU" : " nao ha nesta placa"));
-  Serial.printf("microfone:   %s  pico recente %.3f em %lu blocos\n", tem_mic ? "ok" : "FALHOU",
-                voz.picoEZera(), (unsigned long)voz.blocos());
-  Serial.printf("camera:      %s\n", tem_camera ? "ok" : "FALHOU");
-  Serial.printf("voz:         %s\n",
-                voz.ligado() ? "ligada" : "nenhum servico (ver docs/05-a-voz.md)");
-  Serial.printf("PSRAM:       %u KB livres de %u KB\n", (unsigned)(ESP.getFreePsram() / 1024),
-                (unsigned)(ESP.getPsramSize() / 1024));
-  Serial.printf("heap:        %u KB livres\n", (unsigned)(ESP.getFreeHeap() / 1024));
+  saida.printf("alto-falante:%s\n",
+               tem_audio ? " ok" : (TEM_AMPLIFICADOR ? " FALHOU" : " nao ha nesta placa"));
+  saida.printf("microfone:   %s  pico recente %.3f em %lu blocos\n", tem_mic ? "ok" : "FALHOU",
+               voz.picoEZera(), (unsigned long)voz.blocos());
+  saida.printf("camera:      %s\n", tem_camera ? "ok" : "FALHOU");
+  saida.printf("voz:         %s\n",
+               voz.ligado() ? "ligada" : "nenhum servico (ver docs/05-a-voz.md)");
+  saida.printf("PSRAM:       %u KB livres de %u KB\n", (unsigned)(ESP.getFreePsram() / 1024),
+               (unsigned)(ESP.getPsramSize() / 1024));
+  saida.printf("heap:        %u KB livres\n", (unsigned)(ESP.getFreeHeap() / 1024));
+  saida.printf("console rede:%s\n", console_rede.descricao().c_str());
+}
+
+// ---- O comando, vindo de onde vier ---------------------------------
+//
+//  Serial e Wi-Fi chamam a MESMA funcao. Nao ha um "modo remoto"
+//  parecido com o console e um "modo local" de verdade - sao a mesma
+//  coisa, e por isso nunca podem divergir silenciosamente. `saida` e
+//  onde a resposta vai: o Serial do USB, ou o cliente TCP conectado.
+void executaComando(Print& saida, char c) {
+  switch (c) {
+    case 't': xTaskCreatePinnedToCore(tarefaTeste, "teste", 4096, nullptr, 2, nullptr, 1); break;
+    case 'w':
+      corpo.anda(50, 50);
+      saida.println("frente");
+      break;
+    case 's':
+      corpo.anda(-50, -50);
+      saida.println("re");
+      break;
+    case 'a':
+      corpo.anda(-45, 45);
+      saida.println("esquerda");
+      break;
+    case 'd':
+      corpo.anda(45, -45);
+      saida.println("direita");
+      break;
+    case 'x':
+      corpo.para();
+      saida.println("parar");
+      break;
+    case '1':
+      corpo.servo(1, servo1_alto ? 45 : 135);
+      servo1_alto = !servo1_alto;
+      break;
+    case '2':
+      corpo.servo(2, servo2_alto ? 45 : 135);
+      servo2_alto = !servo2_alto;
+      break;
+    case 'b':
+      if (tem_audio) alto_falante.bipe();
+      break;
+    case 'p':
+      // Despeja a foto em base64. Pela serial ou pela rede - as duas
+      // sao so um Print, e a funcao nao sabe nem precisa saber qual.
+      saida.println("[camera] capturando...");
+      if (!camera.despeja(saida)) saida.println("[camera] falhou");
+      break;
+    case 'f': {
+      const size_t n = camera.mede();
+      saida.printf("[camera] quadro de %u bytes\n", (unsigned)n);
+      break;
+    }
+    case '?': estado(saida); break;
+    case 'h': ajuda(saida); break;
+    default: break;
+  }
 }
 
 }  // namespace
@@ -202,65 +263,50 @@ void setup() {
 
   voz.begin();
 
+  // ---- Wi-Fi e o console de rede, so se ha credencial --------------
+  //
+  // Sem WIFI_SSID (secrets.h ausente ou vazio), o robo sobe do mesmo
+  // jeito - so sem o console remoto. E a mesma regra do resto do
+  // firmware: falta de segredo nunca impede o boot, so reduz o que a
+  // placa oferece.
+  if (WIFI_SSID[0] != '\0') {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_SENHA);
+    Serial.printf("[cerebro] conectando a \"%s\"", WIFI_SSID);
+    const uint32_t espera = millis() + 10000;  // 10 s, e segue sem rede se nao der
+    while (WiFi.status() != WL_CONNECTED && millis() < espera) {
+      delay(300);
+      Serial.print('.');
+    }
+    Serial.println();
+    if (WiFi.status() == WL_CONNECTED) {
+      console_rede.begin();
+      Serial.printf("[cerebro] Wi-Fi ok: %s - console de teste em telnet %s:%u\n",
+                    WiFi.localIP().toString().c_str(), WiFi.localIP().toString().c_str(),
+                    (unsigned)cerebro::ConsoleRedePorta);
+    } else {
+      Serial.println("[cerebro] Wi-Fi nao respondeu em 10 s - seguindo so com a serial");
+    }
+  } else {
+    Serial.println("[cerebro] sem WIFI_SSID em secrets.h - console de rede desligado");
+  }
+
   xTaskCreatePinnedToCore(tarefaSentidos, "sentidos", 4096, nullptr, 2, nullptr, 1);
 
   if (tem_audio) alto_falante.bipe(660, 90);
-  ajuda();
+  ajuda(Serial);
 }
 
 void loop() {
-  // ---- Console --------------------------------------------------
+  // ---- Console pela serial ----------------------------------------
   while (Serial.available()) {
-    const char c = (char)Serial.read();
-    switch (c) {
-      case 't': xTaskCreatePinnedToCore(tarefaTeste, "teste", 4096, nullptr, 2, nullptr, 1); break;
-      case 'w':
-        corpo.anda(50, 50);
-        Serial.println("frente");
-        break;
-      case 's':
-        corpo.anda(-50, -50);
-        Serial.println("re");
-        break;
-      case 'a':
-        corpo.anda(-45, 45);
-        Serial.println("esquerda");
-        break;
-      case 'd':
-        corpo.anda(45, -45);
-        Serial.println("direita");
-        break;
-      case 'x':
-        corpo.para();
-        Serial.println("parar");
-        break;
-      case '1':
-        corpo.servo(1, servo1_alto ? 45 : 135);
-        servo1_alto = !servo1_alto;
-        break;
-      case '2':
-        corpo.servo(2, servo2_alto ? 45 : 135);
-        servo2_alto = !servo2_alto;
-        break;
-      case 'b':
-        if (tem_audio) alto_falante.bipe();
-        break;
-      case 'p':
-        // Despeja a foto pela serial. Sem cartao SD e sem Wi-Fi
-        // configurado, e o unico caminho para a imagem virar arquivo.
-        Serial.println("[camera] capturando...");
-        if (!camera.despeja(Serial)) Serial.println("[camera] falhou");
-        break;
-      case 'f': {
-        const size_t n = camera.mede();
-        Serial.printf("[camera] quadro de %u bytes\n", (unsigned)n);
-        break;
-      }
-      case '?': estado(); break;
-      case 'h': ajuda(); break;
-      default: break;
-    }
+    executaComando(Serial, (char)Serial.read());
   }
+
+  // ---- Console pela rede -------------------------------------------
+  // Mesmo comando, mesma funcao - ver a nota em cima de
+  // executaComando(). So entra em jogo se o Wi-Fi subiu.
+  console_rede.atende(executaComando);
 
   // ---- Um sinal de vida, sem inundar o console -------------------
   static uint32_t ultimo_relato = 0;

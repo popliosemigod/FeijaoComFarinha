@@ -229,6 +229,32 @@ costuma ser ligada com o robô na mesa, e mesa tem borda.
 
 ---
 
+## O mesmo console, sem cabo
+
+**Só existe se `WIFI_SSID` estiver preenchido em `include/secrets.h`** (copie
+de `secrets.example.h`). Sem credencial, o robô sobe do mesmo jeito — só sem
+este console.
+
+Com Wi-Fi, o boot mostra o IP e a placa passa a aceitar as **mesmas teclas**
+numa porta de rede — não é um comando novo para aprender, é o console de sempre
+chegando por outro caminho:
+
+```powershell
+telnet <ip-que-apareceu-no-boot> 23
+# ou, se o Windows nao tiver telnet instalado:
+Set-Service -Name TelnetClient -StartupType Manual  # uma vez, como admin
+# ou simplesmente:
+ncat <ip> 23        # se tiver o Nmap/Ncat instalado
+```
+
+Um cliente por vez — o segundo que tentar entrar vê a recusa na hora, em vez de
+ficar esperando. **Sem senha no protocolo**, porque é a mesma decisão que a
+ponte do Jaspy já toma na LAN de casa: quem entra na rede já controla o robô
+pela mesma porta que o cérebro usa para tudo o mais. Não leve este console para
+uma rede compartilhada sem pensar nisso de novo.
+
+---
+
 ## Se alguma coisa não funcionar
 
 | Sintoma | Causa mais provável |

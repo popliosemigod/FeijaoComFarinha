@@ -18,6 +18,10 @@
 // Rede 2,4 GHz. O radio do ESP32 nao ve 5 GHz, e o sintoma de apontar
 // para uma rede de 5 GHz e "rede nao encontrada" - nunca "senha
 // errada". O diagnostico se perde procurando o lugar errado.
+//
+// Preencher isto TAMBEM liga o console de teste por rede (porta 23,
+// telnet), com os mesmos comandos do console serial. Ver
+// docs/06-montagem-do-corpo.md - "O mesmo console, sem cabo".
 #define WIFI_SSID  "minha-rede-24ghz"
 #define WIFI_SENHA "a-senha"
 
