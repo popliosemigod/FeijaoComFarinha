@@ -3,7 +3,9 @@
 Robô móvel com voz, escuta, câmera e movimento. Duas placas: uma que pensa e
 uma que anda.
 
-> **Estado:** firmware das duas placas escrito e compilando.
+> **Estado:** firmware compilando, e as duas placas já ligadas na bancada.
+> O autoteste rodou no ESP32-C3 (**56 de 56**), e a câmera da ESP32-CAM
+> capturou um quadro real.
 > **Nenhum motor foi ligado, nenhum servo girou, e o robô ainda não existe
 > montado.**
 
@@ -51,9 +53,26 @@ pio device monitor -b 115200     # console
 | Ambiente | Placa | |
 | --- | --- | --- |
 | `corpo` | ESP32-C3 SuperMini | motores, servos, UART, failsafe |
-| `cerebro` | XIAO ESP32-S3 Sense | câmera, mic, áudio, Wi-Fi, decisão |
+| **`cerebro_cam`** | **ESP32-CAM (AI-Thinker)** | **o cérebro que roda hoje** |
+| `cerebro` | XIAO ESP32-S3 Sense | o mesmo cérebro, na placa melhor |
 | `bancada` | ESP32-C3 SuperMini | o corpo com log detalhado |
 | `autoteste` | qualquer ESP32 | a lógica das duas, sem hardware |
+
+### Por que há dois cérebros
+
+Há **uma única XIAO ESP32-S3 Sense** no laboratório, e três projetos a querem.
+A ESP32-CAM é o que destrava este aqui enquanto isso.
+
+É a mesma `main_cerebro.cpp` nas duas: muda só a pinagem, escolhida pelo flag
+`-DCEREBRO_CAM`. Voltar para a Sense é tirar o flag.
+
+O que a ESP32-CAM custa está em
+[`include/config_cerebro_cam.h`](include/config_cerebro_cam.h), na seção *"O QUE
+ESTA PLACA NÃO FAZ"*. A perda que muda o projeto: **ESP32 clássico não roda
+ESP-SR**, então não existe a palavra *"para"* reconhecida sem rede.
+
+E ela só coube porque este projeto **não usa cartão SD**: os seis GPIOs do SDMMC
+são exatamente os que sobraram para a UART e para o microfone.
 
 ### Antes da primeira compilação, no Windows
 
@@ -101,10 +120,23 @@ No Linux e no CI o problema não existe.
 4. Checksum e ID de sequência: **não** recomendados agora, e a razão está
    escrita.
 
+## Medido na bancada
+
+| | |
+| --- | --- |
+| Autoteste no ESP32-C3 (ensaio 0) | **56 de 56, em 4 ms** |
+| Quadro JPEG da OV2640, QVGA | **5103 bytes** |
+| PSRAM livre na ESP32-CAM | 4063 KB de 4096 KB |
+| Heap livre, com câmera e I2S de pé | 240 KB |
+| Heartbeat com o corpo ausente | 46 enviados, 0 respostas — e o log acusa |
+
 ## O que não está provado
 
-- **Nada foi ligado.** O firmware compila; nenhum motor girou, nenhum servo se
-  mexeu, nenhum quadro foi capturado.
+- **Nenhum motor girou e nenhum servo se mexeu.** Nada de potência foi ligado.
+- **O INMP441 ainda não está ligado.** O I2S de entrada roda e entrega blocos, o
+  nível medido é zero porque não há microfone nos pinos.
+- **As duas placas nunca conversaram.** Falta o cabo da UART entre elas — o
+  cérebro diz `corpo MUDO`, que é o comportamento certo.
 - Os limites de ângulo dos servos são **de projeto**, não medidos com o
   mecanismo montado.
 - O duty mínimo de partida dos motores não existe até o [ensaio

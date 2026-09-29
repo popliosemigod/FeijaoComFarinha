@@ -24,9 +24,19 @@ namespace cerebro {
 class Audio {
 public:
   bool begin() {
+#if !TEM_AMPLIFICADOR
+    // Placa sem amplificador (hoje, a ESP32-CAM: nao ha MAX98357A no
+    // estoque). Sai ANTES de tocar em pino nenhum, e isso importa: na
+    // ESP32-CAM o BCLK e o WS da saida sao OS MESMOS do microfone, e
+    // inicializar os dois brigaria pelo periferico. Falhar aqui, cedo
+    // e de proposito, e o que mantem a escuta funcionando.
+    pronto_ = false;
+    return false;
+#else
     i2s_.setPins(PIN_AUDIO_BCLK, PIN_AUDIO_LRC, PIN_AUDIO_DIN, -1, -1);
     pronto_ = i2s_.begin(I2S_MODE_STD, AUDIO_TAXA_HZ, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
     return pronto_;
+#endif
   }
 
   bool pronto() const { return pronto_; }

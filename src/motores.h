@@ -139,7 +139,17 @@ public:
   // instanciar a classe - conferir esta conta nao pode exigir uma
   // ponte H ligada, senao ela so seria conferida tarde demais.
   static int aproxima(int atual, int alvo, int passo) {
-    if (abs(alvo) < abs(atual) || (alvo > 0) != (atual > 0)) return alvo;
+    // Inversao de sentido e so quando os DOIS tem sinal, e sinais
+    // opostos. Escrever isto como `(alvo > 0) != (atual > 0)` parece a
+    // mesma coisa e nao e: com o motor parado, `atual` e zero, `0 > 0`
+    // e falso, e partir do repouso passava por inversao de sentido - a
+    // rampa era pulada exatamente na partida, que e o unico momento
+    // para o qual ela existe. Ela teria "funcionado" sem fazer nada.
+    //
+    // Achado pelo autoteste rodando no C3 em 29/09/2026, antes de
+    // qualquer motor existir.
+    const bool inverteu = (atual > 0 && alvo < 0) || (atual < 0 && alvo > 0);
+    if (inverteu || abs(alvo) < abs(atual)) return alvo;
     if (alvo > atual) return (atual + passo > alvo) ? alvo : atual + passo;
     if (alvo < atual) return (atual - passo < alvo) ? alvo : atual - passo;
     return atual;

@@ -226,8 +226,16 @@ void secaoRampa() {
   Serial.println("\n[6] a rampa (hoje desligada)");
 
   confereInt("com passo grande chega direto", corpo::Motores::aproxima(0, 100, 200), 100);
-  confereInt("subida em passos", corpo::Motores::aproxima(0, 100, 10), 10);
   confereInt("nao passa do alvo", corpo::Motores::aproxima(95, 100, 10), 100);
+
+  // PARTIDA DO REPOUSO - o caso que a rampa existe para proteger, e o
+  // unico que estava quebrado. `atual` em zero era lido como "sinal
+  // diferente de positivo", entao a rampa era pulada justamente na
+  // partida. Achado com o autoteste rodando no C3 em 29/09/2026.
+  confereInt("sobe em passos partindo do zero", corpo::Motores::aproxima(0, 100, 10), 10);
+  confereInt("o mesmo para tras", corpo::Motores::aproxima(0, -100, 10), -10);
+  confereInt("segundo passo", corpo::Motores::aproxima(10, 100, 10), 20);
+  confereInt("parado continua parado", corpo::Motores::aproxima(0, 0, 10), 0);
 
   // A parte que e seguranca: descer e imediato. Rampa na frenagem
   // atrasaria uma parada de emergencia, e proteger a fonte nao vale

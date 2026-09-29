@@ -51,10 +51,30 @@ bool servo2_alto = false;
 // ---- Sentidos: o microfone, lido sem atrapalhar ninguem ------------
 void tarefaSentidos(void*) {
   static int16_t bloco[256];
+  uint32_t mudo = 0;  // leituras seguidas sem nenhuma amostra
   for (;;) {
     if (tem_mic) {
       const size_t n = microfone.le(bloco, sizeof(bloco) / sizeof(bloco[0]));
-      if (n > 0) voz.ouve(bloco, n);
+      if (n > 0) {
+        if (mudo > 50) Serial.println("[sentidos] microfone voltou a dar sinal");
+        mudo = 0;
+        voz.ouve(bloco, n);
+      } else {
+        // Microfone sem nada ligado devolve timeout a cada leitura, e
+        // o driver reclama sozinho no log - vinte vezes por segundo,
+        // o que enterra qualquer outra mensagem. Depois de um segundo
+        // assim, espaca as tentativas: o diagnostico continua, porque
+        // ele volta a acusar quando o sinal voltar, e o console volta
+        // a ser legivel.
+        mudo++;
+        if (mudo == 50) {
+          Serial.println("[sentidos] microfone sem sinal - conferir a ligacao do INMP441");
+        }
+        if (mudo > 50) {
+          vTaskDelay(pdMS_TO_TICKS(2000));
+          continue;
+        }
+      }
     }
     vTaskDelay(pdMS_TO_TICKS(20));
   }
@@ -117,7 +137,11 @@ void estado() {
   Serial.printf("             %lu enviados, %lu respostas, %lu recusas\n",
                 (unsigned long)corpo.enviados(), (unsigned long)corpo.respostas(),
                 (unsigned long)corpo.erros());
-  Serial.printf("alto-falante:%s\n", tem_audio ? " ok" : " FALHOU");
+  // "FALHOU" e "nao existe nesta placa" sao coisas diferentes, e o
+  // diagnostico so serve se disser qual das duas e. Numa placa sem
+  // amplificador, "FALHOU" manda procurar defeito onde nao ha nada.
+  Serial.printf("alto-falante:%s\n",
+                tem_audio ? " ok" : (TEM_AMPLIFICADOR ? " FALHOU" : " nao ha nesta placa"));
   Serial.printf("microfone:   %s  pico recente %.3f em %lu blocos\n", tem_mic ? "ok" : "FALHOU",
                 voz.picoEZera(), (unsigned long)voz.blocos());
   Serial.printf("camera:      %s\n", tem_camera ? "ok" : "FALHOU");
@@ -147,16 +171,33 @@ void setup() {
                   PIN_UART_RX, (unsigned long)protocolo::HEARTBEAT_MS);
   }
 
-  tem_audio = alto_falante.begin();
-  Serial.printf("[cerebro] alto-falante: %s\n", tem_audio ? "ok" : "FALHOU");
-
-  tem_mic = microfone.begin();
-  Serial.printf("[cerebro] microfone: %s\n", tem_mic ? "ok" : "FALHOU");
-
+  // A CAMERA PRIMEIRO, E A ORDEM E O DEFEITO QUE ISTO CONSERTA.
+  //
+  // No ESP32 classico a camera NAO tem controlador proprio: a
+  // interface DVP roda sobre o I2S0, em modo paralelo, e so o I2S0
+  // serve. Subir o microfone antes fazia ele levar o I2S0 embora, e a
+  // camera morria com uma mensagem que nao fala em camera nenhuma:
+  //
+  //     No free interrupt inputs for I2S0 interrupt
+  //     Camera config failed with error 0xffffffff
+  //
+  // Com a camera primeiro, ela fica com o I2S0 e o microfone cai no
+  // I2S1 sozinho. Na XIAO S3 a ordem e indiferente - la a camera tem
+  // controlador proprio -, entao a mesma sequencia serve nas duas.
+  //
+  // Achado com a placa na mesa em 29/09/2026. Nenhuma leitura de
+  // datasheet tinha apontado isso.
   tem_camera = camera.begin();
   Serial.printf("[cerebro] camera: %s", tem_camera ? "ok" : "FALHOU");
   if (!tem_camera) Serial.printf(" (erro 0x%x)", camera.erro());
   Serial.println();
+
+  tem_audio = alto_falante.begin();
+  Serial.printf("[cerebro] alto-falante: %s\n",
+                tem_audio ? "ok" : (TEM_AMPLIFICADOR ? "FALHOU" : "nao ha nesta placa"));
+
+  tem_mic = microfone.begin();
+  Serial.printf("[cerebro] microfone: %s\n", tem_mic ? "ok" : "FALHOU");
 
   voz.begin();
 

@@ -90,3 +90,95 @@ mínimo de partida dos motores não existe até alguém medir.
 
 Roteiro dos seis ensaios, com as previsões escritas antes, em
 [`docs/04-roteiro-de-bancada.md`](docs/04-roteiro-de-bancada.md).
+
+---
+
+## 2026-09-29 — As placas na mesa, e três defeitos que só o hardware mostrou
+
+Henrique tem **uma única XIAO ESP32-S3 Sense**, e três projetos a querem. A
+decisão foi tentar a ESP32-CAM como cérebro. Ela é pior, e roda — e o caminho
+de volta ficou aberto num flag de compilação.
+
+As duas placas apareceram no PC: **COM7 = ESP32-C3** (o corpo) e
+**COM6 = ESP32 clássico** (a CAM), identificadas pelo esptool.
+
+### Ensaio 0, feito: 56 de 56
+
+O autoteste deixou de ser promessa. Gravado no C3, ele roda em **4 ms**.
+
+Na primeira execução: **53 verificações, 52 passaram, 1 falhou.**
+
+```
+[NAO] subida em passos  (obtido 100, esperado 10)
+```
+
+`aproxima(0, 100, 10)` devolvia 100. A guarda de inversão de sentido estava
+escrita `(alvo > 0) != (atual > 0)`, e **zero não é positivo**: partir do
+repouso era classificado como inversão, e a rampa inteira era pulada.
+
+Exatamente no único momento para o qual a rampa existe — o pico de corrente da
+partida. Ligar `RAMPA_SUBIDA_MS` teria "funcionado" sem fazer absolutamente
+nada, e o brownout continuaria aparecendo.
+
+Corrigido para exigir que os dois tenham sinal e sinais opostos. Quatro casos
+novos entraram no autoteste, incluindo o que escapou. Agora: **56 de 56**.
+
+Vale o registro do método: o defeito estava numa expressão booleana de uma
+linha, revisada por mim duas vezes, e num ramo de código **desligado**. Quem o
+encontrou foi um teste rodando num microcontrolador de verdade, antes de
+existir um motor.
+
+### A câmera do ESP32 clássico é um periférico I2S
+
+Primeiro boot da CAM:
+
+```
+E (132) intr_alloc: No free interrupt inputs for I2S0 interrupt
+E (133) camera: Camera config failed with error 0xffffffff
+```
+
+A mensagem não fala em câmera. A causa: **no ESP32 clássico a interface DVP da
+câmera roda sobre o I2S0**, em modo paralelo, e só o I2S0 serve. O microfone
+subia antes no `setup()` e levava o I2S0 embora.
+
+Conserto um: a câmera inicializa primeiro. Na XIAO S3 a ordem é indiferente,
+porque lá a câmera tem controlador próprio — então a mesma sequência serve nas
+duas placas.
+
+Só que o microfone continuou falhando:
+
+```
+E (206) i2s_common: Allocate rx dma channel failed
+```
+
+Conserto dois: **fixar o microfone no I2S1** com `setPort()`. A alocação
+automática não percebe o conflito porque a câmera usa o driver I2S *antigo* e o
+microfone usa o *novo* — e o novo continua achando que o I2S0 está livre.
+
+(E `I2S_NUM_1`, não o literal `1`: no ESP32 clássico `i2s_port_t` é um enum de
+verdade, e inteiro não compila.)
+
+### O terceiro: o log que se enterra sozinho
+
+Com o microfone de pé mas sem INMP441 ligado, cada leitura devolvia timeout — e
+o driver reclama sozinho, vinte vezes por segundo, enterrando qualquer outra
+mensagem. Depois de um segundo mudo, a task passa a tentar a cada 2 s e avisa
+uma vez. O diagnóstico continua; o console volta a ser legível.
+
+### O que ficou medido
+
+| | |
+| --- | --- |
+| Autoteste no C3 | 56 de 56, em 4 ms |
+| Quadro JPEG da OV2640 em QVGA | **5103 bytes** |
+| PSRAM livre | 4063 KB de 4096 KB |
+| Heap livre, com câmera e I2S de pé | 240 KB |
+| Flash / RAM do `cerebro_cam` | 13,1% / 11,0% |
+| Heartbeat sem o corpo | 46 enviados, 0 respostas, e o log acusa `corpo MUDO` |
+
+### O que continua sem prova
+
+Nenhum motor girou. O INMP441 não está ligado — o nível medido é zero porque
+não há microfone nos pinos, não porque ele esteja mudo. E **as duas placas
+nunca conversaram**: falta o cabo da UART entre elas, e o `corpo MUDO` no log é
+o comportamento correto, não um defeito.
