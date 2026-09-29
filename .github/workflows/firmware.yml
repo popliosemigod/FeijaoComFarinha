@@ -1,0 +1,76 @@
+# =====================================================================
+#  CI do Feijao com Farinha
+#
+#  Compila o firmware a cada push. O ganho e simples: erro de
+#  compilacao aparece no push, nao na hora em que a placa esta na
+#  bancada esperando gravacao.
+#
+#  Compila os TRES ambientes. O `autoteste` entra de proposito: e ele
+#  que exercita o parser, a regra do failsafe e a conta de pulso do
+#  servo, e logica que nao compila no CI tambem nao roda na bancada.
+#
+#  O job nao precisa de credencial nenhuma. E de proposito: o firmware
+#  compila sem `secrets.h`, caindo em modo sem rede. Se algum dia este
+#  CI precisar de uma senha para compilar, a regra foi quebrada.
+# =====================================================================
+name: firmware
+
+on:
+  push:
+    branches: [main, develop, "feat/**", "exp/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compilar:
+    name: compilar firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # O toolchain do ESP32 com core 3.x passa de 1 GB. Sem cache,
+      # cada push gasta varios minutos so baixando o mesmo compilador.
+      - name: cache do PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+
+      - name: instalar PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: compilar os tres ambientes
+        run: pio run
+
+      - name: tamanho do binario
+        run: pio run --target size | tail -30
+
+  padrao:
+    name: padrao de arquivo e commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: instalar pre-commit
+        run: pip install --upgrade pre-commit commitizen
+
+      - name: rodar os hooks em todo o repositorio
+        run: pre-commit run --all-files --show-diff-on-failure

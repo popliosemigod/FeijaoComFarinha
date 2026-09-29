@@ -1,0 +1,82 @@
+# =====================================================================
+#  Commitizen - padrao de mensagem de commit do Feijao com Farinha
+#
+#  Uso:  cz commit      (monta a mensagem por perguntas)
+#        cz check       (valida uma mensagem ja escrita)
+#
+#  Os tipos sao os mesmos do laboratorio (repositorio Jaspy,
+#  docs/03-git-e-versionamento.md). O escopo aqui repete a divisao
+#  fisica do robo: o que e do corpo, o que e do cerebro, e o enlace
+#  entre os dois.
+#
+#  O tipo `calib` importa neste projeto por causa dos motores: duty
+#  minimo de partida, diferenca entre as duas rodas e limite de
+#  corrente so existem depois de medidos. Todo numero que sair da
+#  bancada entra com esse tipo, e o valor vai no corpo da mensagem.
+# =====================================================================
+
+[tool.commitizen]
+name = "cz_customize"
+version = "0.1.0"
+tag_format = "v$version"
+update_changelog_on_bump = true
+changelog_file = "CHANGELOG.md"
+
+[tool.commitizen.customize]
+schema = "<tipo>(<subsistema>): <descricao no imperativo>"
+schema_pattern = '^(feat|hw|cad|fix|calib|test|doc|infra|chore)\((motores|servos|enlace|failsafe|audio|microfone|camera|voz|firmware|hardware|docs|repo)\)!?: .{4,80}(\n[\s\S]*)?$'
+message_template = "{{tipo}}({{subsistema}}): {{descricao}}{% if corpo %}\n\n{{corpo}}{% endif %}"
+example = "calib(motores): registrar duty minimo de partida em 18% medido com o robo no chao"
+info = """
+Tipos:  feat  hw  cad  fix  calib  test  doc  infra  chore
+Escopo: motores  servos  enlace  failsafe  audio  microfone  camera
+        voz  firmware  hardware  docs  repo
+"""
+
+bump_pattern = '^(feat|hw|fix|calib)'
+bump_map = { feat = "MINOR", hw = "MINOR", fix = "PATCH", calib = "PATCH" }
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "tipo"
+message = "Tipo da mudanca"
+choices = [
+  { value = "feat",  name = "feat  - funcionalidade nova" },
+  { value = "hw",    name = "hw    - esquematico, PCB, pinagem" },
+  { value = "cad",   name = "cad   - modelagem 3D, chassi, suporte" },
+  { value = "fix",   name = "fix   - correcao de comportamento errado" },
+  { value = "calib", name = "calib - numero medido na bancada" },
+  { value = "test",  name = "test  - ensaio, autoteste, evidencia" },
+  { value = "doc",   name = "doc   - documentacao" },
+  { value = "infra", name = "infra - ambiente, toolchain, automacao" },
+  { value = "chore", name = "chore - manutencao sem efeito no comportamento" },
+]
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "subsistema"
+message = "Subsistema afetado"
+choices = [
+  { value = "motores",   name = "motores   - pontes BTS7960, duty, sentido, rampa" },
+  { value = "servos",    name = "servos    - os dois servos auxiliares" },
+  { value = "enlace",    name = "enlace    - protocolo UART entre as placas" },
+  { value = "failsafe",  name = "failsafe  - a parada automatica do corpo" },
+  { value = "audio",     name = "audio     - MAX98357A, saida de voz" },
+  { value = "microfone", name = "microfone - captura PDM da placa Sense" },
+  { value = "camera",    name = "camera    - camera da placa Sense" },
+  { value = "voz",       name = "voz       - reconhecimento, sintese, servico" },
+  { value = "firmware",  name = "firmware  - estrutura geral, boot, tasks" },
+  { value = "hardware",  name = "hardware  - montagem fisica, alimentacao" },
+  { value = "docs",      name = "docs      - documentacao do projeto" },
+  { value = "repo",      name = "repo      - repositorio, CI, hooks" },
+]
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "descricao"
+message = "Descricao no imperativo, minuscula, sem ponto final"
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "corpo"
+message = "Corpo (opcional) - o numero medido, o porque, referencia de datasheet"
