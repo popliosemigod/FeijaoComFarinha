@@ -142,6 +142,7 @@ microfone ocupam. O caminho todo está em
 | [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe e quatro propostas em aberto |
 | [04](docs/04-roteiro-de-bancada.md) | **roteiro de ensaios**, com as previsões escritas antes |
 | [05](docs/05-a-voz.md) | a escolha do serviço de voz — ainda não tomada |
+| [07](docs/07-reconhecimento-de-objetos.md) | reconhecimento de objetos — a câmera diz o que vê, com ImageNet pronto |
 
 ## Controle para testes — com ou sem cabo
 

@@ -298,3 +298,52 @@ desmontar de novo.
 Controle de Aplicativo bloqueou este arquivo` — o Windows impedindo o binário
 de rodar, não achando segredo nenhum. Conferido à mão: nenhuma credencial real
 entrou no diff, só os placeholders de sempre em `secrets.example.h`.
+
+---
+
+## 2026-09-29 — Reconhecimento de objetos: o outro lado do `p`
+
+Henrique pediu, no mesmo dia da montagem: a câmera já tira foto, falta ela
+"reconhecer" o que vê. E pediu especificamente uma base **já rotulada**, vinda
+da internet — não treinar do zero.
+
+`scripts/reconhece.py` fecha o laço que `camera.despeja()` deixou aberto: manda
+`p` (serial ou rede — a mesma função do console já serve as duas), decodifica o
+base64, salva o `.jpg` em `evidencias/reconhecimento/` e classifica com
+**MobileNetV2 pré-treinado em ImageNet** (mil categorias, via `torchvision`,
+baixado uma vez e cacheado). Cada captura vira uma linha em `catalogo.csv` — o
+começo de um banco de imagens rotuladas do robô, sem precisar treinar nada
+para existir.
+
+**Decisão de arquitetura, não implementação:** a inferência roda no PC, nunca
+na ESP32-CAM. MobileNetV2 não cabe no orçamento de RAM de uma placa que já
+reparte PSRAM entre câmera e microfone — documentado em
+[`docs/07-reconhecimento-de-objetos.md`](docs/07-reconhecimento-de-objetos.md).
+
+**Smoke test, sem hardware.** Rodado contra a foto real já salva em
+`evidencias/marcos/primeira-foto-20260929.jpg`, para provar o caminho de
+código (baixar pesos, decodificar, montar tensor, classificar) antes de a
+placa estar ligada de novo:
+
+```
+11860 bytes lidos
+  2.6%  golfcart
+  2.0%  harvester
+  1.9%  forklift
+```
+
+Confiança baixa é esperada — a foto original saiu escura, e ImageNet não tem
+categoria "bancada de eletrônica". O que este teste prova é que o script
+funciona, não que o reconhecimento é bom; isso só se mede mostrando um objeto
+de verdade à câmera.
+
+**Achado, não corrigido:** `camera.despeja()` e `tarefaSentidos()` escrevem no
+mesmo `Serial` a partir de tarefas diferentes. Uma foto em curso pode ter uma
+linha de log do microfone ("sem sinal") interleaved no meio do base64 — o
+script detecta pelo tamanho não bater, mas não recupera. Fica registrado em
+[`docs/07`](docs/07-reconhecimento-de-objetos.md#limitações-honestas) como
+risco de arquitetura do console, não deste script.
+
+**O que não está provado:** a captura pela serial de verdade — as placas
+seguem desconectadas desde a sessão da montagem. Só o caminho de classificação
+foi exercitado nesta entrada.

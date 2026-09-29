@@ -28,6 +28,9 @@ evidencias/**/*.jpg
 evidencias/**/*.png
 evidencias/**/*.mp4
 evidencias/**/*.wav
+# catalogo.csv de scripts/reconhece.py: cresce a cada captura, e junto com
+# ele crescem as fotos que documenta - mesma razao de nao versionar o jpg.
+evidencias/**/*.csv
 !evidencias/**/.gitkeep
 
 # ---- Marcos: a excecao, e ela e deliberada ----
