@@ -62,11 +62,99 @@ public:
     const esp_err_t r = esp_camera_init(&c);
     pronto_           = (r == ESP_OK);
     if (!pronto_) erro_ = r;
+
+    // ---- Ajuste para pouca luz ------------------------------------
+    //
+    // Um robo de sala vive em luz ruim: sombra de movel, corredor, e
+    // o fim da noite. O padrao do OV2640 e conservador e entrega
+    // quadro quase preto nessas condicoes - a primeira foto tirada
+    // aqui saiu assim.
+    //
+    // O teto de ganho e o que muda isso de verdade. Ele nao clareia a
+    // imagem sozinho: ele PERMITE que o controle automatico clareie,
+    // ate 128x em vez dos 16x de fabrica. O custo e ruido, e num
+    // quadro que ninguem ia enxergar o ruido e o menor problema.
+    if (pronto_) {
+      sensor_t* s = esp_camera_sensor_get();
+      if (s != nullptr) {
+        s->set_gainceiling(s, GAINCEILING_128X);
+        s->set_brightness(s, 1);
+        s->set_gain_ctrl(s, 1);      // ganho automatico ligado
+        s->set_exposure_ctrl(s, 1);  // exposicao automatica ligada
+        s->set_aec2(s, 1);           // o algoritmo melhor dos dois
+      }
+    }
     return pronto_;
   }
 
   bool pronto() const { return pronto_; }
   esp_err_t erro() const { return erro_; }
+
+  // Tira um quadro e despeja em base64 pela serial, entre marcadores.
+  //
+  // Existe porque esta placa NAO tem cartao SD - e enquanto nao houver
+  // Wi-Fi configurado, este e o unico caminho para uma imagem sair
+  // daqui e virar arquivo. O cabo de gravacao serve de cabo de dados.
+  //
+  // Base64 custa um terco a mais que o binario e atravessa terminal
+  // sem que nenhum byte seja interpretado como controle - num link que
+  // tambem carrega log em texto, binario cru se perderia.
+  //
+  // Descarta alguns quadros antes: o OV2640 sobe com a exposicao e o
+  // balanco de branco ainda convergindo, e as primeiras imagens saem
+  // esverdeadas ou pretas. "A primeira foto" deve ser a primeira
+  // FOTO, nao o primeiro quadro.
+  //
+  // `descartar` em 12, e nao em 2 ou 3: o controle automatico do
+  // OV2640 converge ao longo de varios quadros, e em luz fraca demora
+  // mais. Com poucos descartes a imagem sai escura mesmo com o ganho
+  // liberado - foi o que aconteceu na primeira tentativa.
+  bool despeja(Print& saida, uint8_t descartar = 12) {
+    if (!pronto_) return false;
+
+    for (uint8_t i = 0; i < descartar; i++) {
+      camera_fb_t* lixo = esp_camera_fb_get();
+      if (lixo) esp_camera_fb_return(lixo);
+      delay(120);
+    }
+
+    camera_fb_t* fb = esp_camera_fb_get();
+    if (fb == nullptr) return false;
+
+    saida.printf("---FOTO-INICIO %u %u %u---\n", (unsigned)fb->len, (unsigned)fb->width,
+                 (unsigned)fb->height);
+
+    static const char* T = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    size_t i             = 0;
+    uint16_t na_linha    = 0;
+    while (i + 2 < fb->len) {
+      const uint32_t v =
+          ((uint32_t)fb->buf[i] << 16) | ((uint32_t)fb->buf[i + 1] << 8) | fb->buf[i + 2];
+      saida.write(T[(v >> 18) & 63]);
+      saida.write(T[(v >> 12) & 63]);
+      saida.write(T[(v >> 6) & 63]);
+      saida.write(T[v & 63]);
+      i += 3;
+      if ((na_linha += 4) >= 76) {
+        saida.write('\n');
+        na_linha = 0;
+      }
+    }
+    if (i < fb->len) {  // o resto: um ou dois bytes
+      const size_t sobra = fb->len - i;
+      uint32_t v         = (uint32_t)fb->buf[i] << 16;
+      if (sobra == 2) v |= (uint32_t)fb->buf[i + 1] << 8;
+      saida.write(T[(v >> 18) & 63]);
+      saida.write(T[(v >> 12) & 63]);
+      saida.write(sobra == 2 ? T[(v >> 6) & 63] : '=');
+      saida.write('=');
+    }
+    saida.write('\n');
+    saida.println("---FOTO-FIM---");
+
+    esp_camera_fb_return(fb);
+    return true;
+  }
 
   // Tira um quadro e DEVOLVE o buffer na mesma chamada, entregando so
   // o tamanho. Quadro que fica preso trava a camera depois de

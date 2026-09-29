@@ -40,6 +40,16 @@ Quem para o robô é o corpo, contando o tempo desde o último comando de
 movimento. Nenhum dos dois lados precisa que o outro esteja correto para se
 comportar bem.
 
+## As placas já estão gravadas
+
+`corpo` no ESP32-C3 e `cerebro_cam` na ESP32-CAM, com o firmware desta versão.
+**Depois da montagem não há nada de software a fazer** — ligou, funciona. O
+passo a passo, com um teste ao fim de cada etapa, está em
+[`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md).
+
+Dois resistores de 10 kΩ não são opcionais: um no **EN das pontes** e outro no
+**GPIO12 da ESP32-CAM**. O segundo decide se a placa liga ou não.
+
 ## Compilar e gravar
 
 ```powershell
@@ -100,10 +110,20 @@ Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
 
 No Linux e no CI o problema não existe.
 
+## A primeira foto desta câmera
+
+![Primeira foto da ESP32-CAM — 320x240, 29/09/2026](evidencias/marcos/primeira-foto-20260929.jpg)
+
+Saiu **em base64 pela serial de gravação**, porque esta placa não tem cartão SD —
+e não tem porque os seis pinos do cartão são exatamente os que a UART e o
+microfone ocupam. O caminho todo está em
+[`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md#a-primeira-foto-desta-câmera).
+
 ## Documentação
 
 | | |
 | --- | --- |
+| **[06](docs/06-montagem-do-corpo.md)** | **montagem passo a passo — comece por aqui na bancada** |
 | [01](docs/01-hardware-e-pinagem.md) | as duas placas, pinagem e por que são duas |
 | [02](docs/02-ligacoes-e-alimentacao.md) | **alimentação, GND, capacitores e o BTS7960 em 3,3 V** |
 | [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe e quatro propostas em aberto |
@@ -122,10 +142,13 @@ No Linux e no CI o problema não existe.
 
 ## Medido na bancada
 
-| | |
-| --- | --- |
-| Autoteste no ESP32-C3 (ensaio 0) | **56 de 56, em 4 ms** |
-| Quadro JPEG da OV2640, QVGA | **5103 bytes** |
+| | Previsto | Medido |
+| --- | --- | --- |
+| Autoteste no ESP32-C3 (ensaio 0) | 50 passam | **56 de 56, em 4 ms** |
+| Failsafe dispara (ensaio 1) | 1000–1010 ms | **1001 ms** |
+| `M 200 0` | recusa sem mover | **`ERR fora-de-faixa`** |
+| `S 1 45` alimenta o relógio? | **não** | **não** — failsafe 1001 ms depois |
+| Primeira foto da OV2640 | — | **11 860 bytes**, 320×240 |
 | PSRAM livre na ESP32-CAM | 4063 KB de 4096 KB |
 | Heap livre, com câmera e I2S de pé | 240 KB |
 | Heartbeat com o corpo ausente | 46 enviados, 0 respostas — e o log acusa |

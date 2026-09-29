@@ -30,6 +30,16 @@ evidencias/**/*.mp4
 evidencias/**/*.wav
 !evidencias/**/.gitkeep
 
+# ---- Marcos: a excecao, e ela e deliberada ----
+# `evidencias/` inteiro e ignorado porque enche de captura repetida e
+# pesada. Mas ha imagens que SAO a prova de que uma etapa aconteceu - a
+# primeira foto de uma camera nao se repete, e uma etapa provada por um
+# arquivo que nao esta no repositorio nao esta provada para ninguem.
+# Entram poucas, escolhidas, e cada uma e citada em documento.
+!evidencias/marcos/
+!evidencias/marcos/*.jpg
+!evidencias/marcos/*.png
+
 # ---- CAD / fabricacao ----
 *.3mf
 *.gcode

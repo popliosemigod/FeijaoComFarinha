@@ -9,7 +9,7 @@ medido**.
 
 ---
 
-## Ensaio 0 — o autoteste, antes de existir robô
+## Ensaio 0 — o autoteste, antes de existir robô  ✅ FEITO (29/09)
 
 **Não precisa de robô nenhum.** Grava em qualquer ESP32 da mesa.
 
@@ -20,6 +20,9 @@ pio device monitor -b 115200
 
 **Previsto:** 50 verificações, 50 passam, em menos de 100 ms.
 
+**Medido:** 53 verificações, **52 passaram e 1 falhou** — a rampa era pulada
+na partida do repouso. Corrigido, mais quatro casos novos: **56 de 56, em 4 ms**.
+
 O que ele prova: parser (linha suja, CRLF, minúscula, fora de faixa), a regra do
 failsafe, o leitor de linha (linha partida, linha longa), a montagem de comando
 do lado do cérebro, a conta de pulso do servo e a rampa.
@@ -29,7 +32,7 @@ corrente.
 
 ---
 
-## Ensaio 1 — o corpo sozinho, sem motor ligado
+## Ensaio 1 — o corpo sozinho, sem motor ligado  ✅ FEITO (29/09), menos o duty
 
 Só a C3 energizada, **pontes desconectadas dos motores**, console USB aberto.
 
@@ -43,7 +46,11 @@ Digitar no monitor: `PING`, `M 40 40`, `S 1 45`, `STOP`, `EN 0`, `M 300 0`.
 | Osciloscópio/multímetro em RPWM: duty proporcional | 40 % pedidos ≈ 40 % medidos |
 
 **A medida que importa:** o tempo entre o último comando e a linha de failsafe.
-Previsto entre 1000 e 1010 ms.
+Previsto entre 1000 e 1010 ms. **Medido: 1001 ms**, nas duas vezes.
+
+`M 200 0` respondeu `ERR fora-de-faixa` sem mover nada, e `S 1 45` **não**
+alimentou o relógio — o failsafe disparou 1001 ms depois dele. Falta só a
+medida de duty no osciloscópio, que precisa do instrumento na bancada.
 
 ---
 

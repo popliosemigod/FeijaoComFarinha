@@ -127,6 +127,7 @@ void ajuda() {
   Serial.println("  1 / 2      servo 1 / servo 2 para 45, depois 135");
   Serial.println("  b          bipe no alto-falante");
   Serial.println("  f          foto: mede um quadro da camera");
+  Serial.println("  p          despeja a foto em base64 pela serial");
   Serial.println("  ?          estado de tudo");
 }
 
@@ -243,6 +244,12 @@ void loop() {
         break;
       case 'b':
         if (tem_audio) alto_falante.bipe();
+        break;
+      case 'p':
+        // Despeja a foto pela serial. Sem cartao SD e sem Wi-Fi
+        // configurado, e o unico caminho para a imagem virar arquivo.
+        Serial.println("[camera] capturando...");
+        if (!camera.despeja(Serial)) Serial.println("[camera] falhou");
         break;
       case 'f': {
         const size_t n = camera.mede();
