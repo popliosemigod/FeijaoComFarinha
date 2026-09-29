@@ -13,15 +13,20 @@ Cada captura vira uma linha em evidencias/reconhecimento/catalogo.csv, então
 o catálogo cresce sozinho a cada objeto mostrado à câmera — é o começo do
 banco de imagens rotuladas do robô, mesmo sem treinar nada ainda.
 
+Desde 29/09/2026 a captura também pode vir pelo `web_cerebro.h` (a página que
+o celular usa, em http://<ip>/): `--http` pede a MESMA foto que o telefone já
+vê na tela, sem precisar de porta serial nem de telnet.
+
 Uso:
 
     python scripts/reconhece.py --porta COM7
     python scripts/reconhece.py --rede 192.168.1.50          # console por Wi-Fi, porta 23
+    python scripts/reconhece.py --http 192.168.1.50          # a mesma foto que o celular ve
     python scripts/reconhece.py --porta COM7 --top 3
 
-Precisa de pyserial, torch, torchvision e pillow:
+Precisa de pyserial, requests, torch, torchvision e pillow:
 
-    python -m pip install --user pyserial pillow
+    python -m pip install --user pyserial requests pillow
     python -m pip install --user --index-url https://download.pytorch.org/whl/cpu torch torchvision
 
 A primeira execução baixa os pesos do MobileNetV2 (≈14 MB) da internet e os
@@ -106,6 +111,26 @@ def captura_rede(host, porta=23, prazo_s=8):
         sock.close()
 
 
+def captura_http(host, prazo_s=20):
+    """Pede foto pela mesma rota que o celular usa (web_cerebro.h): POST
+    /foto tira o quadro, GET /foto.jpg devolve o JPEG cru — sem base64,
+    sem o risco de log de outra tarefa cair no meio do quadro (ver a nota
+    em docs/07-reconhecimento-de-objetos.md sobre a corrida no console).
+    """
+    import requests
+
+    base = f"http://{host}"
+    r = requests.post(f"{base}/foto", timeout=prazo_s)
+    r.raise_for_status()
+    dado = r.json()
+    if not dado.get("ok"):
+        sys.exit("a câmera recusou a foto — confira http://%s/ no navegador" % host)
+
+    r = requests.get(f"{base}/foto.jpg", timeout=prazo_s)
+    r.raise_for_status()
+    return r.content, dado["largura"], dado["altura"]
+
+
 def _consome(ler_linha, prazo_s):
     linha_inicio = le_ate_marcador(ler_linha, INICIO, prazo_s)
     partes = linha_inicio.split()
@@ -174,12 +199,15 @@ def main():
     grupo = ap.add_mutually_exclusive_group(required=True)
     grupo.add_argument("--porta", help="porta serial do cérebro, ex. COM7")
     grupo.add_argument("--rede", help="IP do cérebro na rede (console telnet, porta 23)")
+    grupo.add_argument("--http", help="IP do cérebro na rede (a mesma foto que o celular vê, sem base64)")
     ap.add_argument("--top", type=int, default=5, help="quantas categorias mostrar (padrão 5)")
     args = ap.parse_args()
 
     print("[reconhece] pedindo foto...")
     if args.porta:
         jpeg_bytes, largura, altura = captura_serial(args.porta)
+    elif args.http:
+        jpeg_bytes, largura, altura = captura_http(args.http)
     else:
         jpeg_bytes, largura, altura = captura_rede(args.rede)
     print(f"[reconhece] recebida: {len(jpeg_bytes)} bytes, {largura}x{altura}")

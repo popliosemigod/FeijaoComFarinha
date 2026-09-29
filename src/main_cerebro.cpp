@@ -32,6 +32,7 @@
 #include "microfone.h"
 #include "protocolo.h"
 #include "voz.h"
+#include "web_cerebro.h"
 
 namespace {
 
@@ -41,6 +42,7 @@ cerebro::Microfone microfone;
 cerebro::Camera camera;
 cerebro::VozDeMentira voz;
 cerebro::ConsoleRede console_rede;
+cerebro::WebCerebro web_cerebro;
 
 bool tem_audio  = false;
 bool tem_mic    = false;
@@ -131,7 +133,8 @@ void ajuda(Print& saida) {
   saida.println("  b          bipe no alto-falante");
   saida.println("  f          foto: mede um quadro da camera");
   saida.println("  p          despeja a foto em base64");
-  saida.println("  ?          estado de tudo");
+  saida.println(
+      "  ?          estado de tudo (mostra o endereco da foto no celular, se houver Wi-Fi)");
 }
 
 void estado(Print& saida) {
@@ -155,6 +158,9 @@ void estado(Print& saida) {
                (unsigned)(ESP.getPsramSize() / 1024));
   saida.printf("heap:        %u KB livres\n", (unsigned)(ESP.getFreeHeap() / 1024));
   saida.printf("console rede:%s\n", console_rede.descricao().c_str());
+  saida.printf("foto no celular:%s\n", web_cerebro.ligado()
+                                           ? (" http://" + WiFi.localIP().toString() + "/").c_str()
+                                           : " desligado (sem Wi-Fi)");
 }
 
 // ---- O comando, vindo de onde vier ---------------------------------
@@ -281,9 +287,10 @@ void setup() {
     Serial.println();
     if (WiFi.status() == WL_CONNECTED) {
       console_rede.begin();
-      Serial.printf("[cerebro] Wi-Fi ok: %s - console de teste em telnet %s:%u\n",
-                    WiFi.localIP().toString().c_str(), WiFi.localIP().toString().c_str(),
-                    (unsigned)cerebro::ConsoleRedePorta);
+      web_cerebro.begin(&camera);
+      Serial.printf("[cerebro] Wi-Fi ok: %s - console em telnet :%u, foto em http://%s/\n",
+                    WiFi.localIP().toString().c_str(), (unsigned)cerebro::ConsoleRedePorta,
+                    WiFi.localIP().toString().c_str());
     } else {
       Serial.println("[cerebro] Wi-Fi nao respondeu em 10 s - seguindo so com a serial");
     }
@@ -307,6 +314,11 @@ void loop() {
   // Mesmo comando, mesma funcao - ver a nota em cima de
   // executaComando(). So entra em jogo se o Wi-Fi subiu.
   console_rede.atende(executaComando);
+
+  // ---- Foto pelo navegador do celular -------------------------------
+  // Segunda porta, so para imagem - o console de rede e texto e nao
+  // mostra foto nenhuma. So entra em jogo se o Wi-Fi subiu.
+  web_cerebro.tick();
 
   // ---- Um sinal de vida, sem inundar o console -------------------
   static uint32_t ultimo_relato = 0;

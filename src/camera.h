@@ -169,9 +169,56 @@ public:
     return n;
   }
 
+  // Tira um quadro (mesmo descarte de despeja(), pelo mesmo motivo) e
+  // guarda uma COPIA propria, para o WebCerebro servir depois em
+  // /foto.jpg. Existe porque o buffer do driver tem que voltar para a
+  // fila logo apos a captura - sem copia, nao sobraria nada para
+  // atender um pedido HTTP que chega alguns milissegundos depois.
+  //
+  // Uma foto so por vez: a proxima chamada libera esta e guarda a
+  // nova, exatamente como o FarmIO ja faz do lado da camera dele
+  // (main_cam.cpp, g_cop).
+  bool captura(uint8_t descartar = 12) {
+    if (!pronto_) return false;
+
+    for (uint8_t i = 0; i < descartar; i++) {
+      camera_fb_t* lixo = esp_camera_fb_get();
+      if (lixo) esp_camera_fb_return(lixo);
+      delay(120);
+    }
+
+    camera_fb_t* fb = esp_camera_fb_get();
+    if (fb == nullptr) return false;
+
+    uint8_t* copia = (uint8_t*)(psramFound() ? ps_malloc(fb->len) : malloc(fb->len));
+    if (copia == nullptr) {
+      esp_camera_fb_return(fb);
+      return false;
+    }
+    memcpy(copia, fb->buf, fb->len);
+
+    free(buf_);
+    buf_     = copia;
+    tamanho_ = fb->len;
+    largura_ = fb->width;
+    altura_  = fb->height;
+    esp_camera_fb_return(fb);
+    return true;
+  }
+
+  const uint8_t* buffer() const { return buf_; }
+  size_t tamanho() const { return tamanho_; }
+  uint16_t largura() const { return largura_; }
+  uint16_t altura() const { return altura_; }
+
 private:
   bool pronto_    = false;
   esp_err_t erro_ = ESP_OK;
+
+  uint8_t* buf_     = nullptr;
+  size_t tamanho_   = 0;
+  uint16_t largura_ = 0;
+  uint16_t altura_  = 0;
 };
 
 }  // namespace cerebro

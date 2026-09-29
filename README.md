@@ -142,7 +142,7 @@ microfone ocupam. O caminho todo está em
 | [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe e quatro propostas em aberto |
 | [04](docs/04-roteiro-de-bancada.md) | **roteiro de ensaios**, com as previsões escritas antes |
 | [05](docs/05-a-voz.md) | a escolha do serviço de voz — ainda não tomada |
-| [07](docs/07-reconhecimento-de-objetos.md) | reconhecimento de objetos — a câmera diz o que vê, com ImageNet pronto |
+| [07](docs/07-reconhecimento-de-objetos.md) | reconhecimento de objetos e **foto pelo celular** — a câmera diz o que vê, com ImageNet pronto |
 
 ## Controle para testes — com ou sem cabo
 
@@ -159,6 +159,11 @@ Detalhe em
 
 Isto é para **teste manual**, não para operação normal: não há autenticação, e
 é a mesma decisão que a ponte do Jaspy já toma na LAN de casa.
+
+**Pelo celular, com foto:** `http://<ip-do-robô>/` no navegador — um botão
+"Tirar foto" e, depois da primeira, um botão "Baixar" que salva no aparelho
+(a galeria de fábrica costuma achar a pasta Download sozinha). Detalhe em
+[`docs/07-reconhecimento-de-objetos.md`](docs/07-reconhecimento-de-objetos.md#a-foto-no-celular).
 
 ## Em aberto
 

@@ -347,3 +347,39 @@ risco de arquitetura do console, não deste script.
 **O que não está provado:** a captura pela serial de verdade — as placas
 seguem desconectadas desde a sessão da montagem. Só o caminho de classificação
 foi exercitado nesta entrada.
+
+---
+
+## 2026-09-29 — A foto no celular, e por que "baixar" e não só "mostrar"
+
+No meio da sessão anterior, Henrique decidiu: vai testar sempre pelo celular
+(um Galaxy A14), e pediu para as fotos e vídeos "de alguma forma" chegarem na
+galeria do aparelho — com liberdade para escolher como.
+
+O console de rede já existia (`console_rede.h`), mas é telnet: texto puro,
+sem imagem. `src/web_cerebro.h` abre uma segunda porta (80), só para foto —
+`http://<ip>/` no navegador do celular, com "Tirar foto" e, depois da
+primeira captura, "Baixar".
+
+**A decisão que resolve "galeria" sem escrever nenhum código de Android:** o
+atributo `download` num `<a>` faz o navegador salvar o arquivo pela via normal
+de downloads, e a galeria de fábrica (Android e Samsung) já indexa a pasta
+Download sozinha. Não é integração com a galeria — é servir o arquivo do jeito
+que a galeria já sabe achar.
+
+**Reuso deliberado.** `Camera::captura()` (novo método em `camera.h`) copia o
+buffer do driver antes de devolvê-lo, e `WebCerebro::serveFoto()` manda esse
+buffer direto pelo `WebServer::client()`, sem passar por `String` — é
+literalmente o mesmo desenho que `main_cam.cpp` do FarmIO já usa (`g_cop`,
+`capturaFresca()`), só do lado do cérebro em vez da câmera do vaso.
+
+`scripts/reconhece.py` ganhou `--http`: pede a mesma foto que o celular já
+viu, em JPEG binário — sem base64, e sem o risco de corrida no console
+documentado na entrada anterior.
+
+**Provado:** `pio run` compila limpo nas quatro placas (`corpo`, `cerebro`,
+`cerebro_cam`, `autoteste`) com o arquivo novo.
+
+**Não provado:** nenhum celular abriu a página ainda. `serveFoto()` e
+`pedeFoto()` seguem o padrão já em produção no FarmIO, mas isso é
+"dimensionado", não "testado" — falta o ensaio de verdade.

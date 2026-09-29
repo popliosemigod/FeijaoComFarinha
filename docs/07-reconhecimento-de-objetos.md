@@ -1,5 +1,10 @@
 # Reconhecimento de objetos
 
+> **Atualizado em 29/09/2026:** Henrique decidiu usar sempre o celular (um
+> Galaxy A14) para estes testes. A seção
+> [*"A foto no celular"*](#a-foto-no-celular) é sobre isso — inclui como a
+> foto chega na galeria do aparelho.
+
 A câmera já tirava foto e despejava em base64 pelo console (`p`, desde a
 montagem do corpo). O que faltava era alguém do outro lado **ler** essa
 imagem. Este documento é sobre isso: [`scripts/reconhece.py`](../scripts/reconhece.py),
@@ -29,15 +34,44 @@ PSRAM entre câmera e microfone (ver a seção *"O QUE ESTA PLACA NÃO FAZ"* em
 continua fazendo só o que sempre fez — capturar e transmitir —, e a
 inteligência pesada fica do lado que tem CPU e RAM de sobra.
 
+## A foto no celular
+
+O console de rede (`docs/06`) é texto puro — telnet não mostra imagem. Como
+Henrique vai testar sempre pelo telefone,
+[`src/web_cerebro.h`](../src/web_cerebro.h) abre uma segunda porta, a 80, só
+para foto: `http://<ip-do-robô>/` no navegador do celular mostra um botão
+**"Tirar foto"** e, depois da primeira captura, um botão **"Baixar"`**.
+
+**Por que "Baixar" e não só mostrar a foto na tela.** Uma `<img>` sozinha
+entrega a imagem para ver, não para guardar. O atributo `download` no link faz
+o Android salvar o arquivo pelo caminho normal de downloads do navegador — e a
+galeria de fábrica do Android (e a da Samsung, que o A14 traz) indexa a pasta
+Download sozinha, sem app nem configuração. Não é integração com a galeria: é
+oferecer o arquivo do jeito que a galeria já sabe achar. Tocar e segurar a
+foto e escolher "salvar imagem" no menu do navegador funciona do mesmo jeito,
+como alternativa.
+
+O endereço aparece no log de boot (se houver `WIFI_SSID` em `secrets.h`) e no
+comando `?` do console, na linha `foto no celular:`.
+
+**Uma foto só por vez na placa** — cada `POST /foto` sobrescreve a anterior no
+buffer da `Camera` (`captura()`, em `camera.h`); é o mesmo desenho que o
+FarmIO já usa do lado da câmera dele.
+
 ## Uso
 
 ```powershell
-python -m pip install --user pyserial pillow
+python -m pip install --user pyserial requests pillow
 python -m pip install --user --index-url https://download.pytorch.org/whl/cpu torch torchvision
 
 python scripts/reconhece.py --porta COM7          # pelo cabo de gravação
 python scripts/reconhece.py --rede 192.168.1.50   # pelo console de rede (telnet, porta 23)
+python scripts/reconhece.py --http 192.168.1.50   # a mesma foto que o celular já viu
 ```
+
+`--http` é o caminho recomendado quando o robô já está em uso pelo celular:
+pede a MESMA foto que a página do telefone mostra, em JPEG binário — sem
+base64 e sem o risco de corrida no console descrito abaixo.
 
 Cada chamada:
 
@@ -99,6 +133,10 @@ reconhecimento em si, que só se mede mostrando objetos de verdade à câmera.
   `CONTEXTO.md`). O caminho de rede (base64 → decode → classifica) está
   provado; o caminho serial (abrir porta, esperar o boot, mandar `p`, ler a
   resposta) só está dimensionado.
+- **`web_cerebro.h` nunca rodou contra hardware.** `pio run -e cerebro_cam`
+  compila limpo (29/09/2026), e a lógica de `captura()`/`serveFoto()` segue o
+  mesmo padrão já provado em produção no `main_cam.cpp` do FarmIO — mas
+  nenhum celular abriu a página ainda, e "compila" não é "testado".
 - Nenhum objeto foi apresentado deliberadamente à câmera ainda — o catálogo
   em `evidencias/reconhecimento/catalogo.csv` está vazio até a primeira
   captura de verdade.
