@@ -1,0 +1,31 @@
+# Declaração de visão do Feijão com Farinha — LAB_PROMPT_visao.md, passo 2.
+#
+# Módulo compartilhado do laboratório em Jaspy/visao/ (repositório
+# separado — "um repositório por projeto", CLAUDE.md do laboratório).
+# Ver Jaspy/visao/FONTES.md para de onde vem cada fonte citada abaixo.
+#
+# Este projeto não estava no escopo original do LAB_PROMPT_visao.md ("hoje
+# são o Jaspy e o FarmIO"), mas já tinha reconhecimento de objeto rodando
+# antes do prompt existir — scripts/reconhece.py, pedido em 29/09/2026.
+# Declarado aqui para o mesmo descobrir.py enxergar os três projetos com
+# câmera do laboratório, não só dois.
+
+projeto: feijao-com-farinha
+perfil: rapido  # Jaspy/visao/perfis/rapido.yaml — mesmo raciocínio do Jaspy: reage, erra com cautela
+
+capacidades:
+  - nome: objeto_do_dia_a_dia
+    onde: "PC, sob demanda (scripts/reconhece.py — MobileNetV2/ImageNet, torchvision)"
+    status: confirmado
+    medido: "smoke test 29/09/2026 contra foto real (evidencias/marcos/primeira-foto-20260929.jpg) provou o caminho de código (baixa pesos, decodifica JPEG, classifica); confiança baixa esperada — foto escura, sem objeto de teste"
+    referencia: docs/07-reconhecimento-de-objetos.md
+    aviso: "ImageNet não tem categoria própria do laboratório (ex. 'peça impressa em 3D', 'Henrique') — generalista, não especializado"
+
+  - nome: reconhecimento_de_rosto
+    onde: "não planejado"
+    status: fora_de_escopo
+
+pasta_de_fotos_de_teste: evidencias/reconhecimento
+roteiro: "repositório Jaspy, visao/ROTEIRO-FOTOS.md (roteiro escrito para Jaspy/FarmIO; adaptável aqui)"
+
+pergunta_em_aberto: "scripts/reconhece.py usa o MESMO modelo (MobileNetV2/ImageNet) que o Jaspy planeja para 'objeto do dia a dia' — migrar para Jaspy/visao/ como ferramenta compartilhada, ou manter duplicado por projeto? Ver Jaspy/visao/README.md. Não decidido."
