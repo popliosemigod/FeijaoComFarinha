@@ -383,3 +383,127 @@ documentado na entrada anterior.
 **Não provado:** nenhum celular abriu a página ainda. `serveFoto()` e
 `pedeFoto()` seguem o padrão já em produção no FarmIO, mas isso é
 "dimensionado", não "testado" — falta o ensaio de verdade.
+
+---
+
+## 2026-09-30 — O teste simples: som → motor, e a fiação que não está lá
+
+Henrique ligou as duas placas no PC (C3 no COM7, a CAM no COM6 pelo FTDI) e
+pediu um teste básico só com três peças: as duas placas, o INMP441 e os motores
+nas pontes H. O resto fica de fora por agora.
+
+### O que foi escrito
+
+`src/main_teste_som.cpp`, ambiente `teste_som`: a CAM só com microfone e
+enlace. A lógica é uma frase — **um som alto faz o robô andar 1,5 s a 40 % e
+parar**. O corpo roda o `corpo` normal, sem mudança, com o failsafe valendo.
+
+O console mostra as três peças separadas (nível dos dois canais do I2S, corpo
+respondendo ou mudo, estado), e duas teclas tiram o microfone do caminho:
+`g` anda agora, `x` para.
+
+### Medido
+
+| | Previsto | Medido |
+| --- | --- | --- |
+| Gravar `corpo` no C3 | ok | ok, COM7 |
+| Gravar `teste_som` na CAM | pede jumper no GPIO0 | **gravou sozinho**: o FTDI faz o auto-reset |
+| Enlace CAM → corpo | `M 0 0` a cada 250 ms | **nada chega**: o corpo cai em failsafe 1 s depois de qualquer `PING` manual |
+| Enlace corpo → CAM | `PONG` de volta | **0 bytes**: 53 `PONG` emitidos, nenhum visto no GPIO13 nem no GPIO14 |
+| INMP441 | nível > 0 no canal esquerdo | **só zeros** nos dois canais, e em todas as 12 combinações de BCLK/WS/SD |
+
+Nenhum dos dois defeitos é de firmware. O corpo responde `PING` pelo USB, a CAM
+envia e conta; o que falta é cobre entre as duas, e entre a CAM e o microfone.
+**Nenhum motor girou** — de propósito: sem enlace o som não chega neles, e
+girar pelo console do corpo sem ninguém olhando o robô não prova nada.
+
+### Dois diagnósticos que ficaram no firmware de teste
+
+**O enlace, sem ambiguidade.** Enlace mudo não diz qual fio falhou. A primeira
+tentativa foi medir a tensão de repouso (um TX fica em nível alto) — e ela
+**mentiu**: o GPIO13 leu 3,1 V sem estar ligado em TX nenhum, porque os pinos do
+cartão SD da ESP32-CAM têm pull-up na placa. O que ficou: se o `PING` não volta,
+a CAM **só escuta**, um pino de cada vez, enquanto alguém manda `PING` no USB do
+corpo. O `PONG` aparece no pino em que o TX do corpo realmente está — e se for o
+pino errado, o teste sobe o enlace trocado e avisa (`Corpo::begin()` ganhou os
+pinos como parâmetro opcional, só para isso).
+
+**O microfone, tecla `v`.** Varre BCLK/WS/SD pelos pinos livres e classifica a
+linha de dados: sinal, só zeros, presa em 1. Sinal de verdade mexe nos 24 bits
+de cima; só o último bit mudando é linha solta pegando a borda do relógio
+vizinho — a primeira versão da varredura chamou isso de "SINAL" e estava errada.
+
+### A máquina, que quase impediu tudo
+
+`pio run` não compilava nesta máquina, por dois motivos que não aparecem no CI:
+
+- **Caminho longo.** O pacote de bibliotecas do core 3.x tem um arquivo cujo
+  caminho, no diretório temporário do PlatformIO, passa de 260 caracteres.
+  Resolvido com `PLATFORMIO_CACHE_DIR=C:\Users\henri\.pc`; o definitivo é ligar
+  `LongPathsEnabled` no Windows (pede administrador).
+- **Git Bash.** O instalador dos toolchains recusa rodar sob MSYS
+  (`MSys/Mingw is not supported`) e o erro seguinte é `g++ não é reconhecido`.
+  Rodar o `pio` pelo PowerShell.
+
+### O que continua sem prova
+
+Motor girando, e o microfone ouvindo. Os dois dependem de fio: GPIO14 da CAM →
+GPIO20 do C3, GPIO13 da CAM ← GPIO21 do C3, e o INMP441 em 3,3 V / GND / 15 /
+2 / 12. A CAM está com o `teste_som` gravado — o `cerebro_cam` (câmera, foto)
+volta com `pio run -e cerebro_cam -t upload --upload-port COM6`.
+
+---
+
+## 2026-09-30 (2) — O adaptador não é o caminho: o enlace passa a carregar tudo
+
+Henrique religou os fios e o enlace **CAM → corpo passou a funcionar**: o corpo
+parou de cair em failsafe. Só que eu pedi para ele ligar o adaptador USB da CAM
+"com os fios como estão" para ler o microfone, e a resposta dele foi o achado da
+sessão: **o adaptador ocupa o header inteiro. Com ele encaixado não há
+microfone nem enlace.** Ler a CAM pelo USB dela e testar o robô montado são
+coisas que não acontecem ao mesmo tempo.
+
+Com o robô montado, o único USB que sobra é o do corpo. Então o enlace passou a
+carregar o que faltava.
+
+### O que foi escrito
+
+| | |
+| --- | --- |
+| `#texto` (cérebro → corpo) | relato; o corpo mostra no USB como `[cam] texto` |
+| `>texto` (USB → corpo → cérebro) | vale como digitado no console do cérebro |
+| `PONTE` (USB do corpo) | USB ligado cru ao enlace, com as pontes H soltas |
+| `src/atualiza_serial.h` | o cérebro recebe firmware novo por um `Stream` e grava na outra partição |
+| `scripts/grava_pelo_enlace.py` | o lado do PC: blocos com offset e CRC, um por vez, com resposta |
+| `board_build.partitions = min_spiffs.csv` | duas partições de aplicação na CAM — a `huge_app` padrão tem uma só |
+
+O `teste_som` ganhou o console pelo enlace (`>g`, `>x`, `>?`), `d` para
+desarmar o som (mede sem mover o robô), `+`/`-` para o limiar, e o relato do
+microfone a cada 500 ms pelo fio.
+
+### Medido
+
+| | Previsto | Medido |
+| --- | --- | --- |
+| `PONTE` no C3 | bytes da CAM crus no USB | **ok**: `M 0 0` a cada 250 ms, `M 40 40` × 6, `STOP` |
+| Som → motor, firmware antigo na CAM | dispara com palma | **dispara sozinho, em laço**: `STOP` a cada 3,0 s exatos |
+| O mesmo, com as pontes H soltas pela `PONTE` | igual | ciclo de **4,0 s**: o disparo vem ~1 s depois do descanso, não na hora |
+
+O laço é defeito meu, não do microfone: o ruído de fundo só era aprendido
+quando **não** havia disparo, então um nível constante acima do limiar dispara
+para sempre. Corrigido (o descanso também aprende o fundo), compilado, **não
+gravado**. A diferença entre 3,0 s e 4,0 s diz que as pontes habilitadas mudam
+o que o microfone ouve — motor girando, ou ruído elétrico delas na linha de
+dados. Qual dos dois, só os números do microfone dizem, e eles só saem pelo
+firmware novo.
+
+### O que não está provado, e o que custa provar
+
+**Nada do lado da CAM rodou.** O firmware que está nela é o de antes — sem
+relato, sem console pelo enlace, sem receptor de gravação — e ele só sai de lá
+pelo UART0. Ou seja: **falta uma última gravação pelo adaptador**, com os fios
+fora. Depois dela, `scripts/grava_pelo_enlace.py` troca o firmware pelo COM7.
+
+Também sem prova: o sentido corpo → CAM do fio (o `r` do relato vai dizer), e o
+receptor de gravação em si. Com a CAM no adaptador dá para provar o receptor
+antes de remontar: `python scripts/grava_pelo_enlace.py --direto --porta COM6`.

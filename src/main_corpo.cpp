@@ -100,6 +100,58 @@ void executa(const protocolo::Comando& c) {
   }
 }
 
+// ---- A ponte: o USB do corpo vira o cabo serial do cerebro ---------
+//
+//  A ESP32-CAM nao tem USB, e o adaptador dela ocupa o header inteiro:
+//  com ele encaixado, microfone e enlace ficam de fora. Entao o unico
+//  fio que continua ligado na CAM com o robo montado e este enlace - e
+//  e por ele que passa a gravacao de firmware novo (ver
+//  `atualiza_serial.h` e `scripts/grava_pelo_enlace.py`).
+//
+//  Enquanto a ponte esta aberta o corpo NAO interpreta nada: os bytes
+//  passam crus nos dois sentidos, e um bloco de firmware pode conter
+//  `M 100 100` por acaso. Por isso as pontes H ficam SOLTAS durante
+//  ela inteira, e so voltam ao estado anterior quando ela fecha.
+//
+//  Fecha sozinha: PONTE_OCIOSA_MS sem byte nenhum vindo do USB.
+void ponte() {
+  const bool estava = motores.estaHabilitado();
+  motores.habilita(false);
+  Serial.println("[corpo] ponte aberta - motores soltos");
+
+  uint8_t buf[256];
+  uint32_t ultimo_do_usb = millis();
+  while (millis() - ultimo_do_usb < PONTE_OCIOSA_MS) {
+    int n = Serial.available();
+    if (n > 0) {
+      n = (int)Serial.readBytes(buf, (size_t)min(n, (int)sizeof(buf)));
+      Serial1.write(buf, (size_t)n);
+      ultimo_do_usb = millis();
+    }
+    n = Serial1.available();
+    if (n > 0) {
+      n = (int)Serial1.readBytes(buf, (size_t)min(n, (int)sizeof(buf)));
+      Serial.write(buf, (size_t)n);
+    }
+  }
+
+  // O que sobrou pela metade no leitor de linha e lixo binario.
+  entrada.limpa();
+  motores.habilita(estava);
+  ultimo_movimento_ms = millis();
+  Serial.println("\n[corpo] ponte fechada");
+}
+
+bool ehPonte(const char* linha) {
+  static const char ALVO[] = "PONTE";
+  for (uint8_t i = 0; i < sizeof(ALVO); i++) {
+    char c = linha[i];
+    if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+    if (c != ALVO[i]) return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 void setup() {
@@ -136,13 +188,22 @@ void setup() {
   Serial.printf("rampa de subida: %s\n",
                 RAMPA_SUBIDA_MS == 0 ? "desligada (comando vale na hora)" : "ligada");
   Serial.println("pronto. Comandos: M <esq> <dir> | S <n> <ang> | STOP | EN <0|1> | PING");
+  Serial.println("so no USB: `>tecla` fala com o console do cerebro | PONTE abre o enlace cru");
 }
 
 void loop() {
   // ---- Entrada: um byte por vez, sem esperar por ninguem ----------
   while (Serial1.available()) {
     if (entrada.alimenta((char)Serial1.read())) {
-      executa(protocolo::interpreta(entrada.texto()));
+      // Linha que comeca com '#' e RELATO do cerebro, nao comando: vai
+      // para o USB e nao recebe resposta nem alimenta o failsafe. E o
+      // que deixa ler o cerebro com o robo montado, pelo unico USB que
+      // sobra - o do corpo.
+      if (entrada.texto()[0] == protocolo::MARCA_RELATO) {
+        Serial.printf("[cam] %s\n", entrada.texto() + 1);
+      } else {
+        executa(protocolo::interpreta(entrada.texto()));
+      }
     }
     if (entrada.estourou()) {
       responde(protocolo::ERR_LONGA);
@@ -158,9 +219,18 @@ void loop() {
   static enlace::Linha console;
   while (Serial.available()) {
     if (console.alimenta((char)Serial.read())) {
-      const protocolo::Comando c = protocolo::interpreta(console.texto());
-      Serial.printf("[console] %s\n", console.texto());
-      executa(c);
+      if (console.texto()[0] == protocolo::MARCA_CONSOLE) {
+        // `>...` nao e para o corpo: segue inteira para o cerebro, que
+        // trata o resto da linha como digitado no console dele.
+        Serial1.print(console.texto());
+        Serial1.print('\n');
+      } else if (ehPonte(console.texto())) {
+        ponte();
+      } else {
+        const protocolo::Comando c = protocolo::interpreta(console.texto());
+        Serial.printf("[console] %s\n", console.texto());
+        executa(c);
+      }
     }
   }
 

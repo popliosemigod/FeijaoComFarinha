@@ -90,6 +90,28 @@ intenção é ficar parado" não pode virar log de failsafe.
 
 Nenhum dos dois lados precisa que o outro esteja correto para se comportar bem.
 
+## O que passa pelo enlace e não é movimento
+
+A ESP32-CAM não tem USB, e o adaptador dela ocupa o header inteiro: com ele
+encaixado não há microfone nem enlace. Com o robô montado, **o único USB que
+sobra é o do corpo** — então o enlace carrega também o console do cérebro.
+
+| Linha | Sentido | Efeito |
+| --- | --- | --- |
+| `#<texto>` | cérebro → corpo | relato: o corpo mostra no USB como `[cam] <texto>`, não responde e não alimenta o failsafe |
+| `><texto>` | USB → corpo → cérebro | o resto da linha vale como digitado no console do cérebro (`>g`, `>?`) |
+| `PONTE` | só no USB do corpo | liga o USB direto ao enlace, byte a byte |
+
+`PONTE` existe para gravar firmware no cérebro sem o adaptador
+([`atualiza_serial.h`](../src/atualiza_serial.h),
+[`scripts/grava_pelo_enlace.py`](../scripts/grava_pelo_enlace.py)). Enquanto ela
+está aberta o corpo **não interpreta nada** — um bloco de firmware pode conter
+`M 100 100` por acaso —, e por isso as pontes H ficam **soltas** do começo ao
+fim. Fecha sozinha depois de 5 s sem byte vindo do USB.
+
+Nenhuma das três muda o parser de movimento: `#` e `>` são desviadas antes de
+ele ser chamado, e `PONTE` só é aceita pelo console USB, nunca pelo enlace.
+
 ## Quatro propostas — decisão do Henrique
 
 O prompt do projeto pede para **discutir antes de implementar**. Nenhuma destas

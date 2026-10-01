@@ -29,6 +29,15 @@
 //     OK               comando aceito
 //     ERR <motivo>     comando recusado, com o motivo em uma palavra
 //     PONG             resposta ao PING
+//
+//  Duas marcas no primeiro caractere tiram a linha do protocolo de
+//  movimento. Existem porque, com o robo montado, o unico USB que
+//  sobra e o do corpo - e o cerebro precisa ser lido e operado por ele.
+//
+//     #<texto>         cerebro -> corpo: relato. O corpo repassa ao USB
+//                      e nao responde.
+//     ><texto>         corpo -> cerebro: digitado no USB do corpo, vale
+//                      como digitado no console do cerebro.
 // =====================================================================
 #pragma once
 
@@ -73,6 +82,10 @@ static const int VEL_MAX    = 100;
 static const int ANG_MIN    = 0;
 static const int ANG_MAX    = 180;
 static const uint8_t SERVOS = 2;
+
+// ---- Marcas ---------------------------------------------------------
+static const char MARCA_RELATO  = '#';  // cerebro -> corpo -> USB
+static const char MARCA_CONSOLE = '>';  // USB -> corpo -> cerebro
 
 // ---- Respostas ------------------------------------------------------
 static const char RESP_OK[]   = "OK";

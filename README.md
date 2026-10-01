@@ -3,11 +3,14 @@
 Robô móvel com voz, escuta, câmera e movimento. Duas placas: uma que pensa e
 uma que anda.
 
-> **Estado:** firmware compilando, e as duas placas já ligadas na bancada.
-> O autoteste rodou no ESP32-C3 (**56 de 56**), e a câmera da ESP32-CAM
-> capturou um quadro real.
-> **Nenhum motor foi ligado, nenhum servo girou, e o robô ainda não existe
-> montado.**
+> **Estado (30/09/2026):** as duas placas ligadas entre si e conversando num
+> sentido — o corpo recebe os comandos da ESP32-CAM. O autoteste passou
+> (**56 de 56**), o failsafe foi medido, a câmera capturou um quadro real, e a
+> CAM já recebe firmware novo pela serial, sem o modo de gravação.
+> **Nenhum motor foi visto girando, e o microfone ainda não tem nível medido.**
+>
+> O resumo do caminho até aqui e do que falta está em
+> [`docs/00-resumo.md`](docs/00-resumo.md).
 
 ## Objetivo
 
@@ -42,22 +45,30 @@ comportar bem.
 
 ## O que está gravado nas placas, hoje
 
-`corpo` no ESP32-C3 está com o firmware desta versão — confirmado no boot.
+| Placa | Firmware | |
+| --- | --- | --- |
+| ESP32-C3 | `corpo` desta versão | com relato, console e `PONTE` |
+| ESP32-CAM | **`teste_som`** de 30/09/2026 | microfone e enlace — **sem câmera** |
 
-`cerebro_cam` na ESP32-CAM está com uma versão **anterior** ao console de teste
-por rede (commit `b8768cb`): as duas placas foram desconectadas no meio da
-sessão em que o console foi escrito, antes de regravar. **O código compila** —
-`pio run -e cerebro_cam`, zero avisos — mas "compila" não é "está na placa", e
-os dois não podem ser confundidos.
+A CAM **não** está com o `cerebro_cam`. Está com o teste simples: um som alto
+faz o robô andar 1,5 s e parar. Ele liga com o som **armado** — deixe as rodas
+livres na primeira ligada.
 
-**Antes de tirar o adaptador USB de vez**, grave esta versão:
+**O adaptador USB da CAM ocupa o header inteiro.** Com ele encaixado não há
+microfone nem enlace, então ler a CAM pelo USB dela e testar o robô montado não
+acontecem ao mesmo tempo. Por isso tudo passa pelo **USB do corpo**: o que a CAM
+relata, as teclas do console dela e o firmware novo
+([`docs/03`](docs/03-protocolo-uart.md#o-que-passa-pelo-enlace-e-não-é-movimento)).
 
 ```powershell
-pio run -e cerebro_cam -t upload --upload-port <a porta da ESP32-CAM>
+pio run -e teste_som
+python scripts/grava_pelo_enlace.py      # grava a CAM pelo COM7, sem adaptador
 ```
 
-Depois disso, sim: **depois da montagem não há nada de software a fazer** —
-ligou, funciona. O passo a passo, com um teste ao fim de cada etapa, está em
+Isso vale para o `teste_som`. O `cerebro_cam` ainda não tem o receptor: gravá-lo
+agora devolve a câmera e traz de volta a dependência do adaptador.
+
+O passo a passo da montagem, com um teste ao fim de cada etapa, está em
 [`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md).
 
 Dois resistores de 10 kΩ não são opcionais: um no **EN das pontes** e outro no
@@ -78,6 +89,7 @@ pio device monitor -b 115200     # console
 | `corpo` | ESP32-C3 SuperMini | motores, servos, UART, failsafe |
 | **`cerebro_cam`** | **ESP32-CAM (AI-Thinker)** | **o cérebro que roda hoje** |
 | `cerebro` | XIAO ESP32-S3 Sense | o mesmo cérebro, na placa melhor |
+| `teste_som` | ESP32-CAM (AI-Thinker) | o teste simples: som → motor, sem câmera |
 | `bancada` | ESP32-C3 SuperMini | o corpo com log detalhado |
 | `autoteste` | qualquer ESP32 | a lógica das duas, sem hardware |
 
@@ -121,6 +133,13 @@ Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
                  -Name LongPathsEnabled -Value 1
 ```
 
+Se o que falha é a pasta temporária (`.platformio\.cache\tmp\...` no erro),
+encurtar só o cache basta: `$env:PLATFORMIO_CACHE_DIR = "C:\Users\<voce>\.pc"`.
+
+E rode o `pio` pelo **PowerShell**, não pelo Git Bash: o instalador dos
+toolchains recusa o MSYS (`MSys/Mingw is not supported`), e o erro que aparece
+depois é só `g++ não é reconhecido como um comando`.
+
 No Linux e no CI o problema não existe.
 
 ## A primeira foto desta câmera
@@ -136,10 +155,11 @@ microfone ocupam. O caminho todo está em
 
 | | |
 | --- | --- |
+| **[00](docs/00-resumo.md)** | **resumo: o caminho até aqui, como está, e o que falta** |
 | **[06](docs/06-montagem-do-corpo.md)** | **montagem passo a passo — comece por aqui na bancada** |
 | [01](docs/01-hardware-e-pinagem.md) | as duas placas, pinagem e por que são duas |
 | [02](docs/02-ligacoes-e-alimentacao.md) | **alimentação, GND, capacitores e o BTS7960 em 3,3 V** |
-| [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe e quatro propostas em aberto |
+| [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe, **o console e a gravação pelo enlace**, e quatro propostas em aberto |
 | [04](docs/04-roteiro-de-bancada.md) | **roteiro de ensaios**, com as previsões escritas antes |
 | [05](docs/05-a-voz.md) | a escolha do serviço de voz — ainda não tomada |
 | [07](docs/07-reconhecimento-de-objetos.md) | reconhecimento de objetos e **foto pelo celular** — a câmera diz o que vê, com ImageNet pronto |
@@ -150,6 +170,11 @@ Pela serial (sempre disponível): abra o monitor a 115200 baud e digite uma
 tecla — `w a s d x` movem, `1`/`2` os servos, `t` a rotina completa, `?` o
 estado. Lista inteira em
 [`docs/06-montagem-do-corpo.md`](docs/06-montagem-do-corpo.md#cartão-de-bolso--o-console-do-cérebro).
+
+**Pelo USB do corpo, com o robô montado:** no monitor do C3, `>` na frente da
+tecla manda para o console do cérebro (`>g`, `>x`, `>?`), e o que o cérebro
+relata aparece como `[cam] ...`. É o único console que existe sem o adaptador
+da CAM — hoje, só no `teste_som`.
 
 Pela rede, sem cabo nenhum: preencha `WIFI_SSID`/`WIFI_SENHA` em
 `include/secrets.h` (copiado de `secrets.example.h`) e o robô sobe com um
@@ -187,14 +212,19 @@ Isto é para **teste manual**, não para operação normal: não há autenticaç
 | PSRAM livre na ESP32-CAM | 4063 KB de 4096 KB |
 | Heap livre, com câmera e I2S de pé | 240 KB |
 | Heartbeat com o corpo ausente | 46 enviados, 0 respostas — e o log acusa |
+| Enlace CAM → corpo, com os fios refeitos | `M` a cada 250 ms | **chega**: o corpo não cai mais em failsafe |
+| Gravação da CAM pela serial (354 KB) | — | **43 s**, MD5 conferido, reiniciou na imagem nova |
+| Som → motor, primeira versão | dispara com palma | **dispara em laço**, a cada 3,0 s — lógica corrigida |
 
 ## O que não está provado
 
-- **Nenhum motor girou e nenhum servo se mexeu.** Nada de potência foi ligado.
-- **O INMP441 ainda não está ligado.** O I2S de entrada roda e entrega blocos, o
-  nível medido é zero porque não há microfone nos pinos.
-- **As duas placas nunca conversaram.** Falta o cabo da UART entre elas — o
-  cérebro diz `corpo MUDO`, que é o comportamento certo.
+- **Nenhum motor foi visto girando e nenhum servo se mexeu.** O corpo recebe o
+  comando de andar; ninguém confirmou a roda.
+- **O microfone não tem nível medido.** Ele dispara o teste, então entrega algum
+  sinal — mas o comportamento muda com as pontes H habilitadas, e não se sabe se
+  é som ou ruído elétrico.
+- **O sentido corpo → CAM do enlace**, e com ele o console e a gravação de
+  firmware passando pelo C3. A gravação só foi provada direto no UART0 da CAM.
 - Os limites de ângulo dos servos são **de projeto**, não medidos com o
   mecanismo montado.
 - O duty mínimo de partida dos motores não existe até o [ensaio

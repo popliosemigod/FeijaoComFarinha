@@ -96,6 +96,12 @@
 // bastante para nao disputar com a UART.
 #define PASSO_LACO_MS 10
 
+// ---- Ponte USB <-> enlace -------------------------------------------
+// Quanto tempo a ponte espera por um byte do USB antes de fechar. Tem
+// que cobrir a conferencia final de uma gravacao (o cerebro relendo a
+// imagem inteira para o MD5), em que o PC fica calado.
+#define PONTE_OCIOSA_MS 5000
+
 // ---- Log ------------------------------------------------------------
 // O console sai pelo USB CDC. Quando nao ha USB conectado, escrever
 // nele nao bloqueia - o core descarta. E o que permite deixar o log

@@ -31,8 +31,11 @@ namespace cerebro {
 
 class Corpo {
 public:
-  bool begin() {
-    Serial1.begin(protocolo::BAUD, SERIAL_8N1, PIN_UART_RX, PIN_UART_TX);
+  // Os pinos sao os do config, sempre - menos no `teste_som`, que mede
+  // a fiacao antes e sobe o enlace trocado quando acha os fios
+  // invertidos, para o teste seguir e o defeito ficar no log.
+  bool begin(int8_t rx = PIN_UART_RX, int8_t tx = PIN_UART_TX) {
+    Serial1.begin(protocolo::BAUD, SERIAL_8N1, rx, tx);
     trava_ = xSemaphoreCreateMutex();
     if (trava_ == nullptr) return false;
 
@@ -79,6 +82,39 @@ public:
     });
   }
 
+  // ---- O que nao e movimento: relato, console e pausa --------------
+  //
+  // Com o robo montado, o unico USB que sobra e o do corpo. Entao o
+  // enlace carrega tambem o que o cerebro tem a dizer (`#...`, que o
+  // corpo repassa ao USB) e o que foi digitado la para ele (`>...`).
+
+  // Uma linha de relato. Cortada no limite do protocolo: o corpo
+  // descarta inteira a linha que passa dele, e relato pela metade e
+  // melhor que relato nenhum. Uma escrita so, para nao se misturar
+  // com o heartbeat que sai da outra task.
+  void relata(const char* texto) {
+    char linha[protocolo::LINHA_MAX];
+    const int n  = snprintf(linha, sizeof(linha) - 1, "%c%s", protocolo::MARCA_RELATO, texto);
+    size_t fim   = (n < 0) ? 0 : ((size_t)n > sizeof(linha) - 2 ? sizeof(linha) - 2 : (size_t)n);
+    linha[fim++] = '\n';
+    Serial1.write((const uint8_t*)linha, fim);
+  }
+
+  // Quem recebe as linhas `>...`. Chamado de dentro da task do enlace:
+  // tem que ser curto - guardar a linha e sair.
+  void aoConsole(void (*f)(const char*)) { ao_console_ = f; }
+
+  // Para a task do enlace e devolve o Serial1 a quem chamou. Existe
+  // para a gravacao de firmware pelo enlace, que precisa do fio so para
+  // ela. Sem heartbeat o corpo cai em failsafe - e e isso mesmo que se
+  // quer com o cerebro ocupado regravando a si proprio.
+  void pausa() {
+    pausado_          = true;
+    const uint32_t t0 = millis();
+    while (!parado_ && millis() - t0 < 1000) delay(5);
+  }
+  void retoma() { pausado_ = false; }
+
   // ---- O que o resto do cerebro pergunta ---------------------------
 
   // O corpo respondeu ha pouco? Nao e ele quem freia o robo - disso
@@ -108,12 +144,22 @@ private:
     TickType_t proximo = xTaskGetTickCount();
 
     for (;;) {
+      if (pausado_) {
+        parado_ = true;
+        vTaskDelay(pdMS_TO_TICKS(20));
+        proximo = xTaskGetTickCount();
+        continue;
+      }
+      parado_ = false;
+
       // ---- Le o que o corpo respondeu ------------------------------
       while (Serial1.available()) {
         if (resposta.alimenta((char)Serial1.read())) {
           ultima_resposta_ms_ = millis();
           respostas_++;
-          if (resposta.texto()[0] == 'E' && resposta.texto()[1] == 'R') {
+          if (resposta.texto()[0] == protocolo::MARCA_CONSOLE) {
+            if (ao_console_ != nullptr) ao_console_(resposta.texto() + 1);
+          } else if (resposta.texto()[0] == 'E' && resposta.texto()[1] == 'R') {
             erros_++;
             // Recusa do corpo nao se resolve insistindo: e um comando
             // que o cerebro montou errado. Vai para o log inteira.
@@ -179,6 +225,10 @@ private:
 
   SemaphoreHandle_t trava_ = nullptr;
   TaskHandle_t task_       = nullptr;
+
+  void (*ao_console_)(const char*) = nullptr;
+  std::atomic<bool> pausado_{false};
+  std::atomic<bool> parado_{false};
 
   // Intencao atual, protegida pela trava.
   int esq_         = 0;
