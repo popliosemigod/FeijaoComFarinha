@@ -1,4 +1,25 @@
-# A voz — a decisão que ainda não foi tomada
+# A voz — o que já ouve, e o que ainda falta decidir
+
+> **Desde 01/10/2026 o robô transcreve fala.** Henrique pediu fala para texto, e
+> saiu a metade "ouvir" da opção 1 abaixo: a placa recorta as frases
+> ([`src/voz_serial.h`](../src/voz_serial.h)) e o PC transcreve com Whisper
+> ([`scripts/ouve.py`](../scripts/ouve.py)) — o mesmo motor da ponte do Jaspy,
+> pelo cabo USB, porque o Wi-Fi ainda não tem credencial.
+>
+> ```powershell
+> pio run -e cerebro -t upload --upload-port COM13
+> python scripts/ouve.py --porta COM13
+> ```
+>
+> | Medido na XIAO S3 Sense, voz sintética a ~1 m | |
+> | --- | --- |
+> | *"Feijão com farinha, ande para a frente."* | `Feijão com farinha, ande para a frente.` |
+> | *"Pare agora."* | `Para e agora.` |
+> | *"Vire para a esquerda e tire uma foto."* | `Vire para a esquerda e tira uma foto.` |
+> | Tempo para transcrever (CPU, modelo `small`) | 2,5 a 3,6 s por frase; uma levou 8,9 s |
+>
+> **O texto fica no PC.** Transformar o que foi dito em ordem para o robô, e
+> falar de volta, continuam em aberto — é o resto deste documento.
 
 O prompt do projeto diz, com estas palavras: *"Decisão em aberto — PERGUNTE
 antes de implementar a parte de voz: qual serviço de reconhecimento de fala /

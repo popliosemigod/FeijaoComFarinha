@@ -32,6 +32,7 @@
 #include "microfone.h"
 #include "protocolo.h"
 #include "voz.h"
+#include "voz_serial.h"
 #include "web_cerebro.h"
 
 namespace {
@@ -40,7 +41,7 @@ cerebro::Corpo corpo;
 cerebro::Audio alto_falante;
 cerebro::Microfone microfone;
 cerebro::Camera camera;
-cerebro::VozDeMentira voz;
+cerebro::VozPorSerial voz;
 cerebro::ConsoleRede console_rede;
 cerebro::WebCerebro web_cerebro;
 
@@ -64,6 +65,12 @@ void tarefaSentidos(void*) {
         if (mudo > 50) Serial.println("[sentidos] microfone voltou a dar sinal");
         mudo = 0;
         voz.ouve(bloco, n);
+        voz.despacha(Serial);
+        // Sem espera aqui, e isso e o que mantem o audio inteiro: a
+        // leitura ja bloqueia ate o bloco chegar, entao a task dorme
+        // sozinha. Com os 20 ms de baixo ela lia 16 ms de som a cada
+        // 36 - bastava para medir nivel, e picotava qualquer frase.
+        continue;
       } else {
         // Microfone sem nada ligado devolve timeout a cada leitura, e
         // o driver reclama sozinho no log - vinte vezes por segundo,
@@ -133,6 +140,7 @@ void ajuda(Print& saida) {
   saida.println("  b          bipe no alto-falante");
   saida.println("  f          foto: mede um quadro da camera");
   saida.println("  p          despeja a foto em base64");
+  saida.println("  o / q      escuta: manda cada frase ouvida para o PC transcrever / para");
   saida.println(
       "  ?          estado de tudo (mostra o endereco da foto no celular, se houver Wi-Fi)");
 }
@@ -151,9 +159,11 @@ void estado(Print& saida) {
                tem_audio ? " ok" : (TEM_AMPLIFICADOR ? " FALHOU" : " nao ha nesta placa"));
   saida.printf("microfone:   %s  pico recente %.3f em %lu blocos\n", tem_mic ? "ok" : "FALHOU",
                voz.picoEZera(), (unsigned long)voz.blocos());
-  saida.printf("camera:      %s\n", tem_camera ? "ok" : "FALHOU");
-  saida.printf("voz:         %s\n",
-               voz.ligado() ? "ligada" : "nenhum servico (ver docs/05-a-voz.md)");
+  saida.printf("camera:      %s (sensor 0x%x)\n", tem_camera ? "ok" : "FALHOU",
+               (unsigned)camera.sensor());
+  saida.printf("voz:         escuta %s, %lu frases mandadas, fundo %.4f\n",
+               voz.ligado() ? "LIGADA" : "desligada (`o` liga)", (unsigned long)voz.frases(),
+               voz.fundo());
   saida.printf("PSRAM:       %u KB livres de %u KB\n", (unsigned)(ESP.getFreePsram() / 1024),
                (unsigned)(ESP.getPsramSize() / 1024));
   saida.printf("heap:        %u KB livres\n", (unsigned)(ESP.getFreeHeap() / 1024));
@@ -214,6 +224,16 @@ void executaComando(Print& saida, char c) {
       saida.printf("[camera] quadro de %u bytes\n", (unsigned)n);
       break;
     }
+    case 'o':
+      // O audio sai sempre pelo console da placa, mesmo que a tecla
+      // tenha vindo pela rede: e la que `scripts/ouve.py` esta lendo.
+      voz.escuta(true);
+      saida.println("[voz] escuta ligada - cada frase ouvida sai em base64, para scripts/ouve.py");
+      break;
+    case 'q':
+      voz.escuta(false);
+      saida.println("[voz] escuta desligada");
+      break;
     case '?': estado(saida); break;
     case 'h': ajuda(saida); break;
     default: break;
@@ -298,7 +318,7 @@ void setup() {
     Serial.println("[cerebro] sem WIFI_SSID em secrets.h - console de rede desligado");
   }
 
-  xTaskCreatePinnedToCore(tarefaSentidos, "sentidos", 4096, nullptr, 2, nullptr, 1);
+  xTaskCreatePinnedToCore(tarefaSentidos, "sentidos", 6144, nullptr, 2, nullptr, 1);
 
   if (tem_audio) alto_falante.bipe(660, 90);
   ajuda(Serial);

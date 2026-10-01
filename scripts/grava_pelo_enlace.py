@@ -8,15 +8,17 @@ caminho que continua ligado com o robo montado:
     PC --USB--> corpo (C3, em PONTE) --enlace--> CAM (atualiza_serial.h)
 
 Uso:
-    python scripts/grava_pelo_enlace.py                       # teste_som, COM7
+    python scripts/grava_pelo_enlace.py                       # teste_som_cam, COM7
     python scripts/grava_pelo_enlace.py --env cerebro_cam
     python scripts/grava_pelo_enlace.py --direto --porta COM6 # CAM no adaptador
 
 `--direto` fala com o UART0 da CAM sem passar pelo corpo. Serve para provar o
 receptor com a placa no adaptador, antes de depender dele com o robo montado.
 
-So funciona se o firmware que JA ESTA na CAM tiver o receptor (teste_som de
-30/09/2026 em diante). A primeira gravacao ainda e pelo adaptador.
+So funciona se o firmware que JA ESTA na CAM tiver o receptor (teste_som_cam,
+de 30/09/2026 em diante). A primeira gravacao ainda e pelo adaptador.
+
+A XIAO S3 Sense nao precisa disto: ela tem USB proprio.
 """
 from __future__ import annotations
 
@@ -77,7 +79,7 @@ def manda_bloco(porta: serial.Serial, offset: int, dados: bytes) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--porta", default="COM7", help="porta do corpo (ou da CAM, com --direto)")
-    ap.add_argument("--env", default="teste_som", help="ambiente do PlatformIO a gravar")
+    ap.add_argument("--env", default="teste_som_cam", help="ambiente do PlatformIO a gravar")
     ap.add_argument("--bin", type=Path, help="imagem a gravar (padrao: a do --env)")
     ap.add_argument("--direto", action="store_true", help="a porta e o UART0 da CAM, sem ponte")
     args = ap.parse_args()
@@ -110,7 +112,7 @@ def main() -> int:
         resposta = espera(porta, "#U", 10)
         if resposta != "#U pronto":
             print(f"a CAM nao aceitou a gravacao: {resposta!r}")
-            print("o firmware que esta nela tem o receptor? (teste_som de 30/09 em diante)")
+            print("o firmware que esta nela tem o receptor? (teste_som_cam, de 30/09 em diante)")
             return 1
 
         inicio = time.time()

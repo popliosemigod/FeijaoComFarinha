@@ -32,8 +32,11 @@
 //     Nao substitui os outros dois; convive bem como palavra de
 //     acordar, e e o unico que funciona com a internet caida.
 //
-//  Enquanto a decisao nao vem, nenhuma delas esta escrita - e isso e
-//  melhor que escrever uma e ter que desfazer.
+//  DESDE 01/10/2026 a metade "ouvir" do caminho 1 existe, em
+//  `voz_serial.h`: a placa recorta as frases e o PC transcreve com
+//  Whisper (`scripts/ouve.py`). Pelo cabo, porque o Wi-Fi ainda nao
+//  tem credencial. O texto fica no PC: devolver intencao para o robo
+//  e falar de volta continuam sem escrever.
 // =====================================================================
 #pragma once
 

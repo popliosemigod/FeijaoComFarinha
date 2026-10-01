@@ -3,6 +3,19 @@
 **As duas placas já estão gravadas.** Nada de software precisa ser feito depois
 da montagem: ligou, funciona. Este documento é só fio, parafuso e conferência.
 
+> **O cérebro agora é a XIAO ESP32-S3 Sense** (desde 01/10/2026). Este roteiro
+> foi escrito com a ESP32-CAM, e com a XIAO ele encurta:
+>
+> | Etapa | Com a XIAO |
+> | --- | --- |
+> | 2.2 — resistor no GPIO12 | **não existe**: é um pino da CAM |
+> | 3 — cabo entre as placas | **D6 → GPIO20, D7 → GPIO21**, e o GND |
+> | 4 — o microfone | **não existe**: ele já está na placa |
+> | console | USB-C da própria XIAO, sem adaptador |
+>
+> O resto — GND comum, resistor no EN das pontes, servos, motores por último —
+> vale igual.
+
 Siga na ordem. Cada etapa termina num **teste que você faz antes de seguir** —
 é o que impede um erro de fiação virar três horas de procura depois.
 
@@ -212,7 +225,9 @@ mínima do robô e não dá para calcular, só medir. Vai para o
 
 ## Cartão de bolso — o console do cérebro
 
-Adaptador USB na ESP32-CAM, 115200 baud.
+USB-C da XIAO (na ESP32-CAM, o adaptador USB), 115200 baud. Além das teclas
+abaixo, `o` / `q` ligam e desligam a escuta de frases
+([`docs/05`](05-a-voz.md)).
 
 | Tecla | |
 | --- | --- |

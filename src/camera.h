@@ -90,6 +90,15 @@ public:
   bool pronto() const { return pronto_; }
   esp_err_t erro() const { return erro_; }
 
+  // Qual sensor a placa trouxe (0x26 = OV2640, 0x3660 = OV3660). A
+  // Seeed vende a Sense com os dois, e os comentarios deste arquivo
+  // falam do OV2640 porque foi com ele, na ESP32-CAM, que os ajustes
+  // de pouca luz foram medidos.
+  uint16_t sensor() const {
+    sensor_t* s = pronto_ ? esp_camera_sensor_get() : nullptr;
+    return s != nullptr ? s->id.PID : 0;
+  }
+
   // Tira um quadro e despeja em base64 pela serial, entre marcadores.
   //
   // Existe porque esta placa NAO tem cartao SD - e enquanto nao houver

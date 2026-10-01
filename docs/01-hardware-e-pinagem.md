@@ -94,10 +94,11 @@ visível como tranco em movimento lento.
 
 ---
 
-## A ESP32-CAM como cérebro — o plano que roda hoje
+## A ESP32-CAM como cérebro — o plano B
 
 Há **uma única XIAO ESP32-S3 Sense** no laboratório, e três projetos a querem.
-A ESP32-CAM é o que destrava este aqui enquanto isso. Ela é pior, e funciona.
+A ESP32-CAM destravou este aqui enquanto a Sense estava no FarmIO; desde
+01/10/2026 a Sense é o cérebro e a CAM ficou de reserva. Ela é pior, e funciona.
 
 ### A aritmética de pinos que torna isso possível
 

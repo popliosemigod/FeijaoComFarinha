@@ -507,3 +507,164 @@ fora. Depois dela, `scripts/grava_pelo_enlace.py` troca o firmware pelo COM7.
 Também sem prova: o sentido corpo → CAM do fio (o `r` do relato vai dizer), e o
 receptor de gravação em si. Com a CAM no adaptador dá para provar o receptor
 antes de remontar: `python scripts/grava_pelo_enlace.py --direto --porta COM6`.
+
+---
+
+## 2026-10-01 — A XIAO S3 Sense volta a ser o cérebro
+
+Henrique perguntou se trocar a ESP32-CAM pela XIAO S3 Sense deixaria o projeto
+mais simples. A resposta foi sim, e ele tirou a placa do FarmIO. Os três
+problemas que travaram a bancada no dia anterior são da CAM, não do projeto:
+sem USB (o adaptador ocupa o header), microfone externo com cinco fios e um
+resistor que decide se a placa liga, e câmera e microfone disputando o I2S0.
+
+### O que mudou no repositório
+
+O caminho de volta estava aberto desde o começo — `cerebro` é o ambiente da
+XIAO e sempre compilou. Faltava o teste simples, que tinha um `#error` para
+qualquer placa que não fosse a CAM:
+
+- `main_teste_som.cpp` roda nas duas. A diferença inteira é o microfone: PDM
+  mono de 16 bits na XIAO, INMP441 estéreo de 32 na CAM. A varredura de pinos
+  só existe na CAM — na XIAO não há pino a varrer.
+- `teste_som` passou a ser o da XIAO; o da CAM virou `teste_som_cam`.
+
+### Medido — a primeira vez que este firmware roda numa XIAO
+
+| | Previsto | Medido |
+| --- | --- | --- |
+| `cerebro` sobe sem ajuste | sim | **sim**: câmera ok, microfone ok, alto-falante ok |
+| PSRAM | 8 MB | **8156 KB livres de 8192 KB** |
+| Heap livre, com câmera e I2S de pé | — | **280 KB** |
+| Foto pela serial (`p`) | JPEG íntegro | **4 271 bytes**, 320×240, `ffd8ff … ffd9` |
+| Microfone PDM, sala em silêncio | acima de zero | **0,0005 a 0,002** |
+| Microfone PDM, voz perto da placa | — | **0,01 a 0,055** |
+| Som → disparo | dispara e não repete em laço | **2 disparos em 30 s**, com o fundo subindo de 0,004 durante a fala |
+| Enlace com o corpo | `MUDO` sem os fios | **`MUDO`**, 0 respostas — o C3 não estava ligado |
+
+O disparo em laço do dia anterior não voltou: com o descanso aprendendo o ruído
+de fundo, fala contínua dispara uma vez e para de disparar.
+
+A foto saiu desfocada e de perto — a placa estava solta na bancada. Fica em
+`evidencias/xiao/`, **fora do git**: mostra parte de um rosto, e o repositório é
+público.
+
+### O que custou tempo, e não era da placa
+
+**A XIAO não enumerava no USB** (`Dispositivo USB Desconhecido — falha na
+solicitação de descritor`). Eu culpei o firmware do FarmIO ("deve dormir") sem
+ter olhado — e ele não dorme nem desliga o USB. Era a porta ou o cabo: na outra
+porta do PC ela apareceu estável.
+
+**Meu gravador falhou 116 vezes seguidas** com a placa já funcionando. O
+`esptool` chamado com a saída redirecionada quebra ao imprimir a barra de
+progresso (`UnicodeEncodeError`, cp1252), **depois de conectar e antes de
+gravar**. `PYTHONUTF8=1` resolve; o `pio run -t upload` nunca teve o problema.
+
+### O que continua sem prova
+
+Motor girando, e a XIAO conversando com o C3: faltam os três fios (D6 → GPIO20,
+D7 → GPIO21, GND). O limiar de 0,02 dispara com voz normal perto da placa —
+para uma palma ele provavelmente está baixo, e isso só se acerta com o robô
+montado, porque o motor também faz barulho.
+
+---
+
+## 2026-10-01 (2) — Fala para texto: a placa recorta, o PC transcreve
+
+Depois do teste do microfone, Henrique perguntou o que tinha sido gravado e o
+que ele tinha dito. A resposta honesta era "nada": o `teste_som` só mede volume.
+E ele pediu o que faltava — reconhecimento de voz, fala para texto.
+
+A decisão que o `docs/05` deixava em aberto saiu pelo caminho que já era o
+recomendado: Whisper rodando na máquina do laboratório, o mesmo motor
+(`faster-whisper`) da ponte do Jaspy, que já estava instalado e com o modelo
+`small` em cache. Pelo cabo USB, porque o Wi-Fi do robô ainda não tem credencial.
+
+### O que foi escrito
+
+| | |
+| --- | --- |
+| `src/voz_serial.h` | `VozPorSerial`: recorta cada frase (começo, fim, 300 ms de pré-rolagem) e despeja em base64 |
+| `main_cerebro.cpp` | teclas `o` / `q` ligam e desligam a escuta; a task do microfone parou de dormir entre blocos |
+| `scripts/ouve.py` | junta o áudio, transcreve, salva o `.wav` e a linha em `evidencias/voz/` |
+
+A placa não transcreve nada. Ela faz a metade que só ela pode fazer: decidir
+onde a frase começa e acaba.
+
+**Um defeito antigo, que só o áudio mostrou.** A task dos sentidos lia 16 ms de
+som e dormia 20 ms: consumia menos da metade do que o microfone produzia. Para
+medir nível não fazia diferença — e por isso passou; para gravar uma frase,
+picotava tudo. A leitura já bloqueia até o bloco chegar, então a espera saiu.
+
+### Medido
+
+Sem ninguém falando na sala, o teste foi com a voz sintética do Windows
+(Maria, pt-BR) pelos alto-falantes do notebook, a cerca de um metro da placa.
+
+| Dito | Transcrito |
+| --- | --- |
+| Feijão com farinha, ande para a frente. | `Feijão com farinha, ande para a frente.` |
+| Pare agora. | `Para e agora.` |
+| Vire para a esquerda e tire uma foto. | `Vire para a esquerda e tira uma foto.` |
+| Olá, eu sou o feijão com farinha. | `Olá, eu sou o Feijão com farinha.` |
+| Que horas são agora? | `O que horas são agora?` |
+
+| | Previsto | Medido |
+| --- | --- | --- |
+| Blocos do microfone por segundo | 62,5 | **~66** — a task não perde mais áudio |
+| Frases recortadas, primeira versão | 3 de 3 | **1 de 3** |
+| Frases recortadas, depois do conserto | — | **5 de 5** |
+| Tempo para transcrever (CPU, `small`) | alguns segundos | **2,5 a 3,6 s**; uma levou 8,9 s |
+
+**Por que 1 de 3.** O ruído de fundo subia e descia na mesma velocidade. Fala
+fraca — a um metro o nível é 0,003 a 0,004, contra 0,01 a 0,055 de perto —
+empurrava o fundo para cima antes de passar do limiar, o limiar subia junto, e a
+frase nunca começava. Agora o fundo sobe devagar e desce depressa, e o piso do
+limiar caiu de 0,006 para 0,003.
+
+### O que não está provado
+
+- **Voz de gente.** Tudo acima é voz sintética, limpa e sem sotaque.
+- **Com o motor ligado.** O motor faz barulho, e o recorte nunca ouviu isso.
+- **O texto não volta para o robô.** Aparece na tela do PC e para ali. Devolver
+  não é só mandar a frase pela serial: o console do cérebro trata cada caractere
+  como tecla, e "was" seria frente, esquerda e ré.
+- Na ESP32-CAM o despejo sai pelo UART0 a 115200: cinco segundos de fala levam
+  uns dezoito para atravessar. Compila, e não foi medido.
+
+---
+
+## 2026-10-01 (3) — A foto da XIAO, e o README que cabe numa tela
+
+Henrique pediu três coisas: a pinagem bem clara no GitHub, a página compacta e
+coerente para quem chega, e uma foto tirada pela câmera da XIAO.
+
+### O README
+
+Reescrito de 238 linhas para 181, com a **pinagem como peça central**:
+um diagrama das duas placas e quatro tabelas — cérebro ↔ corpo, corpo → pontes
+e servos, cérebro → amplificador, alimentação. O que saiu de lá não se perdeu:
+o porquê de cada decisão já estava nos `docs/` e neste diário, e o README
+repetia. Agora ele aponta.
+
+### A foto, e quatro tentativas de clareá-la que não funcionaram
+
+A sala estava escura, e a foto saiu escura: **3 274 bytes** em 320×240, contra
+os 4 271 da tarde. O sensor desta Sense é um **OV3660** (`0x3660`), não o OV2640
+para o qual os ajustes de pouca luz foram medidos — o `?` do console passou a
+dizer qual é.
+
+| Tentativa | Resultado |
+| --- | --- |
+| Alvo da exposição automática no máximo (`set_ae_level(2)`) | 3 141 bytes — nada |
+| Exposição longa pelo modo noturno do OV3660 (0x3A00 e os tetos em 0x3A02/14) | 3 160 bytes — nada |
+| Esticar os níveis no PC | clareia, e vira um mosaico: o JPEG não guardou o que não havia |
+| A tela do notebook, toda branca, como lâmpada | 3 366 bytes — a câmera não olhava para lá |
+
+Nenhuma das três mudanças de firmware ficou. Ajuste que não muda a medida não é
+ajuste, é palpite com cara de código — e os registradores do OV3660 eu escrevi
+de memória, sem datasheet na mão. O que ficou foi só a identificação do sensor.
+
+A foto escura entrou em `evidencias/marcos/` do jeito que saiu, com a legenda
+dizendo que a sala estava escura. Com luz, é `p` no console e trocar o arquivo.
