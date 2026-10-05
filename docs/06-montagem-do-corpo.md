@@ -241,7 +241,7 @@ abaixo, `o` / `q` ligam e desligam a escuta de frases
 | `1` `2` | alterna cada servo entre 45° e 135° |
 | `t` | rotina de teste completa |
 | `f` | mede um quadro da câmera |
-| `p` | despeja a foto em base64 pela serial |
+| `p` | tira a foto, guarda para a página e despeja em base64 pela serial (`scripts/fotos.py` salva) |
 | `h` | a ajuda de novo |
 
 **O robô não anda sozinho ao ligar.** Nada se move até você mandar. A placa

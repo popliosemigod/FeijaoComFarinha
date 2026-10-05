@@ -830,3 +830,110 @@ Bluetooth fechado da Espressif, e não atrapalhou nenhuma.
   lados, o centro e o freio.
 - **Motor girando**: não visto nesta sessão.
 - Um segundo controle: o corpo aceita **um** de cada vez — parear outro troca.
+
+## 2026-10-05 (3) — As rodas giram; ✕ tira foto, gatilhos movem os servos
+
+### O teste do Henrique
+
+Com o pareamento novo gravado, Henrique acionou as duas placas, com motores e
+pontes ligados: **as rodas giraram, e o controle respondeu bem — conexão e
+reação boas**. É a primeira vez que um motor deste robô gira. A DevKit não estava
+no USB do PC, então não há log deste teste: o registro é o que ele viu.
+
+### O controle ganha botões
+
+| Controle | Faz | Por onde |
+| --- | --- | --- |
+| manche esquerdo | anda e vira | corpo, direto |
+| **○** | freia, enquanto apertado | corpo, direto — era o ✕ |
+| **✕** | foto | o corpo manda `>p` ao cérebro pelo enlace |
+| **L2** / **R2** | servo 1 / servo 2, proporcional | corpo, direto |
+
+**O ✕ mudou de função** porque Henrique o quis para a foto. O freio foi para a
+○; soltar o manche continua parando o robô na hora.
+
+**A foto.** A câmera é do cérebro e o controle fala com o corpo, então o corpo
+**pede** a foto pelo caminho de console que o enlace já tinha (`>p`, o mesmo de
+quem digita `>p` no USB do corpo) — nada muda no protocolo de movimento. O
+cérebro da XIAO não atendia esse caminho (só o `teste_som` atendia); agora as
+teclas que chegam do corpo entram numa fila e o `loop()` as executa, porque uma
+foto leva 1,5 s e a task do enlace não pode segurar o heartbeat. A foto:
+
+- fica guardada — é a que a página do celular mostra;
+- sai em base64 no USB da XIAO, e `scripts/fotos.py` a salva em
+  `evidencias/fotos/` (fora do git);
+- vira um relato curto para o corpo: `[cerebro] foto 320x240, 10226 bytes`.
+
+Uma foto por aperto, e no máximo uma a cada 2 s — pedido no meio da anterior é
+ignorado, não enfileirado.
+
+**Os servos.** Gatilho solto, servo em 90°; apertado até o fim, 180°
+(`PS4_SERVO_CURSO`, negativo inverte). O corpo só mexe no servo quando o
+gatilho **muda**, então um `S` do cérebro não é desfeito por um gatilho parado.
+Se o controle cai com um gatilho apertado, o servo volta ao repouso.
+
+O relato do cérebro no USB do corpo passou de `[cam]` para `[cerebro]` — o
+nome vinha da ESP32-CAM.
+
+### Medido
+
+| | Medido |
+| --- | --- |
+| Foto pedida pelo PC (`fotos.py --agora`) | **salva**, 320×240, 10 226 bytes, imagem inteira |
+| Foto pedida pelo corpo (`>p` no USB dele) | **não chegou**: o cérebro diz `corpo MUDO, 251 enviados, 0 respostas` |
+| Autoteste na DevKit, com os gatilhos | **65 de 65**, em 224 ms |
+| Os sete ambientes | compilam |
+
+**Os três fios do enlace não estão ligados.** O controle, os motores e o
+pareamento não precisam deles — por isso o teste de hoje andou. A foto do ✕
+precisa: XIAO D6 → DevKit GPIO16, XIAO D7 → GPIO17, GND → GND.
+
+### O que não está provado
+
+- **A foto pelo ✕**, de ponta a ponta: falta o enlace.
+- **Os servos pelos gatilhos**: a conta passa no autoteste; o servo de verdade
+  ainda não foi visto.
+
+## 2026-10-05 (4) — A câmera vira os olhos do Jaspy
+
+Henrique disse para que servem as fotos: **a câmera é a visão do Jaspy**. A
+página do celular é só a olhada rápida.
+
+**Uma foto virou oito.** A câmera guardava uma foto, sobrescrita a cada pedido.
+Agora guarda as **últimas 8** na PSRAM, cada uma com um número que cresce no
+boot; a nona apaga a mais velha. Console, enlace e página rodam todos no
+`loop()` do cérebro, então nenhuma foto é lida enquanto outra é gravada — sem
+trava.
+
+**O que o Jaspy pede**, na rede do robô:
+
+| | |
+| --- | --- |
+| `GET /foto.jpg` | a mais recente |
+| `GET /foto.jpg?n=12` | uma pelo número, enquanto guardada |
+| `GET /fotos` | `{"b":<boot>,"fotos":[12,11,...]}` |
+| `POST /foto` | tira uma agora |
+
+**A página** ganhou uma fileira com as últimas fotos, embaixo da grande: tocar
+numa a mostra em cima, e a fileira se atualiza sozinha a cada 3 s — a foto do ✕
+aparece sem ninguém tocar em nada. A foto pelo número pode ficar no cache do
+telefone (ela nunca muda), então cada atualização baixa só a nova; o `b`, que
+muda a cada boot, impede que a foto 1 de ontem apareça no lugar da de hoje.
+
+O relato do cérebro para o corpo leva o número (`[cerebro] foto 3: 320x240,
+9924 bytes`), e o `?` do console mostra quantas estão guardadas.
+
+### Medido
+
+| | Medido |
+| --- | --- |
+| 10 fotos seguidas pelo console | **8 guardadas, da 3 à 10** |
+| PSRAM com as 8 | 7 736 KB livres de 8 192 (antes: 7 816) |
+| A página, num navegador do PC contra respostas falsas | foto, número, fileira e direcional no lugar |
+| A foto nova do README | 320×240, 9 924 bytes — o robô na bancada, visto da XIAO |
+
+### O que não está provado
+
+- **A página num telefone**, com a XIAO de verdade: entrar na rede do robô tira
+  a internet deste PC.
+- **O Jaspy pedindo foto**: o endereço existe; o lado do Jaspy não.

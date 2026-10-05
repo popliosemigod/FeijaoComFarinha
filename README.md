@@ -3,12 +3,12 @@
 Robô móvel que anda, ouve e vê — e que se dirige pelo controle de PS4 ou pelo
 celular. Duas placas: uma que pensa e uma que anda.
 
-<img src="evidencias/marcos/xiao-foto-20261005.jpg" alt="O que a câmera do robô vê" width="320">
+<img src="evidencias/marcos/xiao-olhos-do-jaspy-20261005.jpg" alt="O robô na bancada, visto pela câmera da XIAO" width="320">
 
 > **Estado (05/10/2026):** o firmware roda nas duas placas. O robô fotografa,
-> **transcreve fala**, tem página própria para dirigir, e o **controle de PS4
-> conecta e comanda o corpo**. **Nenhum motor foi visto girando, e as duas
-> placas ainda não foram ligadas entre si.** O caminho até aqui e o que falta:
+> **transcreve fala**, tem página própria para dirigir, e **as rodas giram pelo
+> controle de PS4**. **As duas placas ainda não foram ligadas entre si** — sem
+> isso, o ✕ pede a foto e o cérebro não ouve. O caminho até aqui e o que falta:
 > [`docs/00-resumo.md`](docs/00-resumo.md).
 
 ## Como é
@@ -30,6 +30,12 @@ O cérebro decide e manda comandos de texto pela serial (`M 40 40`, `STOP`). O
 corpo obedece — e **para sozinho se o cérebro calar por 1 segundo**. O controle
 de PS4 fala direto com o corpo, e enquanto alguém mexe nele, **ele tem a
 prioridade**. `STOP` vale sempre, venha de quem vier.
+
+**A câmera é a visão do [Jaspy](https://github.com/popliosemigod/Jaspy).** A
+XIAO guarda as últimas 8 fotos e as entrega na rede do robô: `GET /foto.jpg`
+(a mais recente), `GET /fotos` (a lista), `POST /foto` (tira agora). A página
+do celular mostra as mesmas, só para uma olhada rápida. A foto acima saiu
+assim.
 
 ## Pinagem
 
@@ -86,12 +92,19 @@ python scripts/pareia_ps4.py --corpo COM4
 ```
 
 Tire o cabo e aperte **PS**: a barra de luz fica verde quando o robô aceita.
-Manche esquerdo anda e vira; **✕** freia.
+
+| Controle | Faz |
+| --- | --- |
+| manche esquerdo | anda e vira |
+| **○** | freia |
+| **✕** | foto — aparece na página; com a XIAO no PC, `scripts/fotos.py` salva |
+| **L2** / **R2** | servo 1 / servo 2, conforme o aperto; soltar volta a 90° |
 
 **Pelo celular.** Entre na rede Wi-Fi **feijao-com-farinha** — a senha aparece
 no console do cérebro no boot e no `?` — e abra **http://192.168.4.1**. Segurar
-uma seta anda, soltar para; tocar na imagem tira uma foto. Se o telefone some, o
-robô para em 0,4 s. Com `include/secrets.h` preenchido, o robô entra na rede de
+uma seta anda, soltar para; tocar na imagem tira uma foto, e a fileira embaixo
+mostra as últimas (as do ✕ aparecem sozinhas). Se o telefone some, o robô para
+em 0,4 s. Com `include/secrets.h` preenchido, o robô entra na rede de
 casa no lugar de criar a própria.
 
 **Pelo console**, com a XIAO no USB (`pio device monitor -p COM13`), teclas sem
@@ -104,6 +117,7 @@ Enter: `w` `a` `s` `d` `x` movem, `p` foto, `o` / `q` liga e desliga a escuta,
 pio run -e cerebro -t upload --upload-port COM13   # grava a XIAO
 pio run -e corpo   -t upload --upload-port COM4    # grava a DevKit
 python scripts/ouve.py --porta COM13               # fala para texto
+python scripts/fotos.py --porta COM13              # salva as fotos do ✕ no PC
 ```
 
 | Ambiente | Placa | |
@@ -119,17 +133,18 @@ python scripts/ouve.py --porta COM13               # fala para texto
 
 | | Medido |
 | --- | --- |
-| Autoteste da lógica, na DevKit | 62 de 62, em 213 ms |
+| Autoteste da lógica, na DevKit | 65 de 65, em 224 ms |
 | Failsafe | para em **1001 ms** sem comando |
-| Câmera da XIAO (OV3660) | brilho médio 118 de 255 — a foto acima |
+| Câmera da XIAO (OV3660) | brilho médio 118 de 255; guarda as últimas 8 fotos |
 | **Fala para texto** | 5 de 5 frases, 2,5 a 3,6 s cada, sem nuvem |
-| **Controle de PS4** | conecta; manche e ✕ chegam ao corpo |
+| **Controle de PS4** | conecta, e **as rodas giram** com boa resposta |
+| Foto pedida pelo PC | sai da XIAO e vira arquivo (`scripts/fotos.py`) |
 | Rede própria do robô | no ar e visível; página de 2,2 KB |
 
 ## O que falta
 
-- **Ver um motor girar** — o controle já basta para isso.
-- **Ligar os três fios** entre a XIAO e a DevKit; dirigir pelo celular.
+- **Ligar os três fios** entre a XIAO e a DevKit: sem eles, a foto do ✕ não
+  chega à câmera. Depois, dirigir pelo celular.
 - **O texto virar ordem:** o que o robô ouve aparece na tela do PC e para ali.
 - A **antena** da XIAO: sem ela, a rede do robô alcança poucos metros.
 - Servos, alto-falante, e voz de gente com o motor ligado.

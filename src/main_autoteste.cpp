@@ -270,6 +270,18 @@ void secaoManche() {
   // limite em vez de estourar a faixa do protocolo.
   corpo::ControlePS4::mistura(127, 127, e, d);
   confere("diagonal prende no limite: 100 e 0", e == 100 && d == 0);
+
+  // Gatilho solto e o servo em repouso: conectar o controle nao pode
+  // mexer servo nenhum.
+  confere("gatilho solto: servo em repouso",
+          corpo::ControlePS4::anguloDoGatilho(0) == SERVO_REPOUSO);
+  const int fim = corpo::ControlePS4::anguloDoGatilho(255);
+  confere("gatilho no fim: repouso + curso",
+          fim == constrain(SERVO_REPOUSO + PS4_SERVO_CURSO, 0, 180));
+  const int meio = corpo::ControlePS4::anguloDoGatilho(128);
+  confere("gatilho no meio: entre os dois",
+          (meio - SERVO_REPOUSO) * (fim - SERVO_REPOUSO) > 0 &&
+              abs(meio - SERVO_REPOUSO) < abs(fim - SERVO_REPOUSO));
 }
 
 }  // namespace

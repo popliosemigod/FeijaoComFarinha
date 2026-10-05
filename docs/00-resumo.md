@@ -7,8 +7,8 @@
 
 Um robô de duas placas — a **XIAO ESP32-S3 Sense** pensa, a **ESP32 DevKit**
 anda — que se dirige pelo controle de PS4 ou pelo celular, fotografa e
-transcreve fala. O firmware roda nas duas placas. **Nenhum motor foi visto
-girando, e as duas ainda não foram ligadas entre si.**
+transcreve fala. O firmware roda nas duas placas, e **as rodas já giram pelo
+controle**. **As duas placas ainda não foram ligadas entre si.**
 
 ## O caminho até aqui
 
@@ -27,6 +27,8 @@ girando, e as duas ainda não foram ligadas entre si.**
 | 05/10 | **A DevKit vira o corpo; controle de PS4 e página para dirigir** | O PS4 fala Bluetooth clássico, que só o ESP32 clássico tem. O Bluepad32 exigiria trocar o core; a biblioteca PS4Controller compilou no core 3.x. A XIAO cria a própria rede e serve uma página mínima: foto e direcional |
 | 05/10 | **As fotos escuras da XIAO** | O teto de ganho pensado para o OV2640 virava 0,375× no OV3660 da XIAO. Corrigido: brilho de **24 para 118** de 255, na mesma cena |
 | 05/10 | **O controle de PS4 de verdade** | Piscava sem conectar: chegava ao corpo e desistia em 0,35 s. Ele confere uma **chave de enlace** a cada conexão, e o corpo não a conhecia. Agora o script grava a chave no controle e conta ao corpo qual controle aceitar: **conectou, e o manche chega às rodas** |
+| 05/10 | **O robô ligado, pelo controle** | Henrique acionou as duas placas: **as rodas giraram, com boa resposta e conexão estável**. Depois: ✕ tira foto (o corpo pede ao cérebro pelo enlace), ○ freia, L2/R2 movem os servos. A foto pedida pelo PC já sai da XIAO e vira arquivo; a do ✕ espera os fios do enlace |
+| 05/10 | **A câmera vira os olhos do Jaspy** | A XIAO guarda as últimas 8 fotos e as serve na rede (`/foto.jpg`, `/fotos`, `POST /foto`) — para o Jaspy ver pelo robô. A página ganhou uma fileira com elas, para olhar rápido |
 
 ## Como está hoje
 
@@ -40,21 +42,29 @@ girando, e as duas ainda não foram ligadas entre si.**
 
 **Provado**
 
-- Autoteste **62 de 62 na DevKit**, incluindo a conta do manche do PS4; failsafe
+- Autoteste **65 de 65 na DevKit**, incluindo as contas do manche e dos gatilhos; failsafe
   em 1001 ms.
 - **XIAO:** câmera (OV3660) com brilho médio 118 de 255, microfone PDM, 8 MB de
   PSRAM, e **fala para texto** — 5 frases de voz sintética, todas transcritas.
-- **Controle de PS4 conectado à DevKit**: manche para os lados vira `M -100 100`
-  e `M 100 -100`, soltar dá `M 0 0`, ✕ freia — visto no log do corpo.
+- **Controle de PS4 dirigindo o robô**: conecta à DevKit, e as rodas giram com
+  boa resposta — teste do Henrique com as duas placas ligadas.
+- **Foto para o PC**: a XIAO tira, guarda para a página e solta no USB;
+  `scripts/fotos.py` salva (320×240, 10 KB).
+- **As últimas 8 fotos na memória**: 10 tiradas, ficaram da 3 à 10, em 80 KB
+  de PSRAM.
 - **Rede própria do robô** no ar e visível do PC; a página foi conferida num
   navegador.
 
 **Não provado**
 
-- **Motor girando**, e as duas placas conversando: faltam os três fios.
-- **Dirigir pelo celular**: a página não foi aberta num telefone ainda.
+- **As duas placas conversando**: faltam os três fios — e com eles a foto do
+  ✕ (hoje o corpo pede e o cérebro não ouve).
+- **Servos pelos gatilhos**: a conta passa no autoteste; o servo de verdade
+  ainda não foi visto.
+- **Dirigir pelo celular**, e a fileira de fotos: a página não foi aberta num
+  telefone ainda (só no PC, contra respostas falsas).
 - **O texto virar ordem.** Hoje ele aparece na tela do PC e para ali.
-- Fala de gente, e com o motor ligado; servos; alto-falante.
+- Fala de gente, e com o motor ligado; alto-falante.
 
 ## Aonde queremos chegar
 
@@ -64,10 +74,11 @@ sozinho**, ouve, fala, vê, e é o mesmo personagem do
 
 O que falta, na ordem em que destrava o resto:
 
-1. **Ver o motor girar** — pelo controle, que já conecta; o cérebro nem precisa
-   estar ligado.
-2. **Ligar os três fios** entre as placas (D6 → GPIO16, D7 → GPIO17, GND).
-3. **Dirigir pelo celular**, com a antena da XIAO no lugar.
+1. **Ligar os três fios** entre as placas (D6 → GPIO16, D7 → GPIO17, GND) — e
+   ver a foto do ✕ chegar.
+2. **Dirigir pelo celular**, com a antena da XIAO no lugar.
+3. **O Jaspy enxergar pelo robô:** pedir `/foto.jpg` e descrever o que vê — a
+   câmera é a visão dele.
 4. **O texto virar ordem:** o que foi transcrito voltar para o robô como
    intenção (andar, parar, virar), com a parada valendo antes de tudo.
 5. **Falar de volta:** síntese de voz, o MAX98357A, e a palavra *"para"*
@@ -82,11 +93,13 @@ pio run -e cerebro -t upload --upload-port COM13   # grava a XIAO
 pio run -e corpo   -t upload --upload-port COM4    # grava a DevKit
 python scripts/pareia_ps4.py --corpo COM4          # pareia (controle e DevKit no USB)
 python scripts/ouve.py --porta COM13               # fala para texto
+python scripts/fotos.py --porta COM13              # salva as fotos do ✕
 ```
 
 Celular: rede **feijao-com-farinha** (senha no console do cérebro, `?`), página
 em **http://192.168.4.1**. Console da XIAO: `w a s d x` movem, `p` foto, `o`/`q`
-escuta, `?` estado. Console da DevKit: `M 40 40`, `STOP`, `EN 0`/`EN 1`.
+escuta, `?` estado. Controle: manche anda, ○ freia, ✕ foto, L2/R2 servos.
+Console da DevKit: `M 40 40`, `STOP`, `EN 0`/`EN 1`.
 
 No Windows, o `pio` roda pelo **PowerShell**, com `PLATFORMIO_CACHE_DIR` num
 caminho curto; o bloqueio do `esptool.exe` o projeto contorna sozinho.

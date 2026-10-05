@@ -75,10 +75,55 @@ void relataControle(int esq, int dir, bool freio) {
   freio_dito = freio;
   dito_ms    = millis();
   if (freio) {
-    Serial.println("[ps4] X: freio");
+    Serial.println("[ps4] O: freio");
   } else {
     Serial.printf("[ps4] M %d %d\n", esq, dir);
   }
+}
+
+// O que os gatilhos pediram aos servos por ultimo.
+int servo_pedido[2] = {SERVO_REPOUSO, SERVO_REPOUSO};
+
+// L2 e R2 nos servos 1 e 2. So age quando o gatilho MUDA: com ele
+// parado, o servo fica onde estiver - inclusive onde o cerebro o tiver
+// posto com `S`. O log segue a mesma regra do manche.
+void gatilhosNosServos(uint8_t l2, uint8_t r2) {
+  static int dito[2]         = {SERVO_REPOUSO, SERVO_REPOUSO};
+  static uint32_t dito_ms[2] = {0, 0};
+  const uint8_t valor[2]     = {l2, r2};
+  for (uint8_t i = 0; i < 2; i++) {
+    const int a = corpo::ControlePS4::anguloDoGatilho(valor[i]);
+    if (a != servo_pedido[i]) {
+      servo_pedido[i] = a;
+      servos.angulo(i + 1, a);
+    }
+    if (a != dito[i] && (a == SERVO_REPOUSO || millis() - dito_ms[i] >= 150)) {
+      dito[i]    = a;
+      dito_ms[i] = millis();
+      Serial.printf("[ps4] %s: servo %u em %d\n", i == 0 ? "L2" : "R2", (unsigned)(i + 1), a);
+    }
+  }
+}
+
+// X pede uma foto ao cerebro - a camera e dele. Vai pelo caminho do
+// console (`>p`), o mesmo de quem digita `>p` no USB daqui: o enlace
+// ja carrega isso, e nada muda no protocolo de movimento. Uma foto por
+// aperto, e no maximo uma a cada PS4_FOTO_INTERVALO_MS.
+void xNaCamera(bool apertado) {
+  static bool estava        = false;
+  static bool ja_pediu      = false;
+  static uint32_t pedido_ms = 0;
+  if (apertado && !estava) {
+    if (!ja_pediu || millis() - pedido_ms >= PS4_FOTO_INTERVALO_MS) {
+      ja_pediu  = true;
+      pedido_ms = millis();
+      Serial1.printf("%cp\n", protocolo::MARCA_CONSOLE);
+      Serial.println("[ps4] X: foto pedida ao cerebro");
+    } else {
+      Serial.println("[ps4] X: ignorado, a foto anterior ainda esta saindo");
+    }
+  }
+  estava = apertado;
 }
 
 uint32_t ultimo_movimento_ms = 0;  // alimenta o failsafe
@@ -307,7 +352,7 @@ void loop() {
       // que deixa ler o cerebro com o robo montado, pelo unico USB que
       // sobra - o do corpo.
       if (entrada.texto()[0] == protocolo::MARCA_RELATO) {
-        Serial.printf("[cam] %s\n", entrada.texto() + 1);
+        Serial.printf("[cerebro] %s\n", entrada.texto() + 1);
       } else {
         executa(protocolo::interpreta(entrada.texto()));
       }
@@ -353,23 +398,33 @@ void loop() {
       Serial.printf("[ps4] controle %s\n", conectado ? "conectado" : "DESCONECTADO");
       if (conectado) {
         controle.acende(0, 60, 0);  // verde: o robo esta ouvindo
-      } else if (controle_dirigindo) {
-        motores.para();  // a mao sumiu no meio do movimento
-        controle_dirigindo = false;
+      } else {
+        if (controle_dirigindo) {
+          motores.para();  // a mao sumiu no meio do movimento
+          controle_dirigindo = false;
+        }
+        // Gatilho apertado quando a mao sumiu: o servo volta, como
+        // voltaria se ela soltasse.
+        for (uint8_t i = 0; i < 2; i++) {
+          if (servo_pedido[i] != SERVO_REPOUSO) {
+            servo_pedido[i] = SERVO_REPOUSO;
+            servos.angulo(i + 1, SERVO_REPOUSO);
+          }
+        }
       }
     }
 
     if (conectado && controle.falando()) {
-      int esq = 0, dir = 0;
-      bool freio       = false;
-      const bool mexeu = controle.le(esq, dir, freio);
-      if (freio || mexeu) {
-        if (freio) {
+      const corpo::ControlePS4::Mao mao = controle.le();
+      gatilhosNosServos(mao.l2, mao.r2);
+      xNaCamera(mao.foto);
+      if (mao.freio || mao.mexeu) {
+        if (mao.freio) {
           motores.para();
           relataControle(0, 0, true);
         } else {
-          motores.velocidade(esq, dir);
-          relataControle(esq, dir, false);
+          motores.velocidade(mao.esq, mao.dir);
+          relataControle(mao.esq, mao.dir, false);
         }
         controle_dirigindo  = true;
         controle_toque_ms   = agora;

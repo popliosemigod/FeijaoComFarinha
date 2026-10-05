@@ -1,11 +1,11 @@
 // =====================================================================
-//  camera.h - a camera da placa Sense, ligada e testavel
+//  camera.h - a camera da placa Sense: os olhos do Jaspy
 //
-//  Sem funcionalidade decidida ainda, por escolha do projeto: o que se
-//  pediu nesta etapa foi deixa-la PRONTA e verificavel. Entao ela
-//  inicializa, tira um quadro e diz o tamanho - o suficiente para
-//  provar que o conector esta encaixado e que a PSRAM esta habilitada,
-//  que sao os dois erros que aparecem primeiro.
+//  O Feijao com Farinha e o Jaspy com rodas, e esta camera e a visao
+//  dele. Ela tira a foto, guarda as ultimas GUARDADAS na PSRAM e as
+//  entrega por tres caminhos: a pagina do robo, para uma olhada rapida;
+//  a rede (`/foto.jpg`, `/fotos` - ver web_cerebro.h), para o Jaspy; e
+//  o USB em base64, que `scripts/fotos.py` salva no PC.
 //
 //  QVGA e JPEG por padrao. Nao e economia de pixel: em resolucao alta
 //  o buffer some da PSRAM que o audio tambem quer, e a primeira coisa
@@ -111,7 +111,8 @@ public:
     return s != nullptr ? s->id.PID : 0;
   }
 
-  // Tira um quadro e despeja em base64 pela serial, entre marcadores.
+  // Tira um quadro, guarda (ver captura()) e despeja em base64 pela
+  // serial, entre marcadores.
   //
   // Existe porque esta placa NAO tem cartao SD - e enquanto nao houver
   // Wi-Fi configurado, este e o unico caminho para uma imagem sair
@@ -131,26 +132,27 @@ public:
   // mais. Com poucos descartes a imagem sai escura mesmo com o ganho
   // liberado - foi o que aconteceu na primeira tentativa.
   bool despeja(Print& saida, uint8_t descartar = 12) {
-    if (!pronto_) return false;
+    if (!captura(descartar)) return false;
+    despejaGuardada(saida);
+    return true;
+  }
 
-    for (uint8_t i = 0; i < descartar; i++) {
-      camera_fb_t* lixo = esp_camera_fb_get();
-      if (lixo) esp_camera_fb_return(lixo);
-      delay(120);
-    }
-
-    camera_fb_t* fb = esp_camera_fb_get();
-    if (fb == nullptr) return false;
-
-    saida.printf("---FOTO-INICIO %u %u %u---\n", (unsigned)fb->len, (unsigned)fb->width,
-                 (unsigned)fb->height);
+  // A ultima foto de captura(), em base64, no mesmo formato de cima.
+  // E o que sai quando o X do controle pede foto: a mesma imagem vai
+  // para a pagina e, por aqui, para o PC (`scripts/fotos.py`).
+  void despejaGuardada(Print& saida) const {
+    const Foto* f = ultima();
+    if (f == nullptr) return;
+    const uint8_t* dados = f->buf;
+    const size_t n       = f->tamanho;
+    saida.printf("---FOTO-INICIO %u %u %u---\n", (unsigned)n, (unsigned)f->largura,
+                 (unsigned)f->altura);
 
     static const char* T = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     size_t i             = 0;
     uint16_t na_linha    = 0;
-    while (i + 2 < fb->len) {
-      const uint32_t v =
-          ((uint32_t)fb->buf[i] << 16) | ((uint32_t)fb->buf[i + 1] << 8) | fb->buf[i + 2];
+    while (i + 2 < n) {
+      const uint32_t v = ((uint32_t)dados[i] << 16) | ((uint32_t)dados[i + 1] << 8) | dados[i + 2];
       saida.write(T[(v >> 18) & 63]);
       saida.write(T[(v >> 12) & 63]);
       saida.write(T[(v >> 6) & 63]);
@@ -161,10 +163,10 @@ public:
         na_linha = 0;
       }
     }
-    if (i < fb->len) {  // o resto: um ou dois bytes
-      const size_t sobra = fb->len - i;
-      uint32_t v         = (uint32_t)fb->buf[i] << 16;
-      if (sobra == 2) v |= (uint32_t)fb->buf[i + 1] << 8;
+    if (i < n) {  // o resto: um ou dois bytes
+      const size_t sobra = n - i;
+      uint32_t v         = (uint32_t)dados[i] << 16;
+      if (sobra == 2) v |= (uint32_t)dados[i + 1] << 8;
       saida.write(T[(v >> 18) & 63]);
       saida.write(T[(v >> 12) & 63]);
       saida.write(sobra == 2 ? T[(v >> 6) & 63] : '=');
@@ -172,9 +174,6 @@ public:
     }
     saida.write('\n');
     saida.println("---FOTO-FIM---");
-
-    esp_camera_fb_return(fb);
-    return true;
   }
 
   // Tira um quadro e DEVOLVE o buffer na mesma chamada, entregando so
@@ -190,15 +189,30 @@ public:
     return n;
   }
 
+  // Uma foto guardada. `numero` cresce a cada captura e nao se repete
+  // no mesmo boot: e por ele que a pagina e o Jaspy pedem uma foto.
+  struct Foto {
+    uint8_t* buf     = nullptr;
+    size_t tamanho   = 0;
+    uint16_t largura = 0;
+    uint16_t altura  = 0;
+    uint32_t numero  = 0;
+  };
+
+  // Quantas ficam na memoria. QVGA em JPEG da 8 a 20 KB: oito sao uns
+  // 150 KB de uma PSRAM de 8 MB. A nona apaga a primeira.
+  static constexpr uint8_t GUARDADAS = 8;
+
   // Tira um quadro (mesmo descarte de despeja(), pelo mesmo motivo) e
-  // guarda uma COPIA propria, para o WebCerebro servir depois em
-  // /foto.jpg. Existe porque o buffer do driver tem que voltar para a
-  // fila logo apos a captura - sem copia, nao sobraria nada para
-  // atender um pedido HTTP que chega alguns milissegundos depois.
+  // guarda uma COPIA propria, para o WebCerebro servir depois. Existe
+  // porque o buffer do driver tem que voltar para a fila logo apos a
+  // captura - sem copia, nao sobraria nada para atender um pedido HTTP
+  // que chega alguns milissegundos depois.
   //
-  // Uma foto so por vez: a proxima chamada libera esta e guarda a
-  // nova, exatamente como o FarmIO ja faz do lado da camera dele
-  // (main_cam.cpp, g_cop).
+  // As ultimas GUARDADAS ficam: sao os olhos do Jaspy, e a pagina as
+  // mostra para uma olhada rapida. Tudo isto roda no loop() do cerebro
+  // (console, enlace e pagina), entao ninguem le uma foto enquanto
+  // outra e gravada.
   bool captura(uint8_t descartar = 12) {
     if (!pronto_) return false;
 
@@ -218,28 +232,55 @@ public:
     }
     memcpy(copia, fb->buf, fb->len);
 
-    free(buf_);
-    buf_     = copia;
-    tamanho_ = fb->len;
-    largura_ = fb->width;
-    altura_  = fb->height;
+    Foto& f = fotos_[proxima_];  // a mais antiga, ou uma vaga
+    free(f.buf);
+    f.buf     = copia;
+    f.tamanho = fb->len;
+    f.largura = fb->width;
+    f.altura  = fb->height;
+    f.numero  = ++numero_;
+    ultima_   = proxima_;
+    proxima_  = (proxima_ + 1) % GUARDADAS;
     esp_camera_fb_return(fb);
     return true;
   }
 
-  const uint8_t* buffer() const { return buf_; }
-  size_t tamanho() const { return tamanho_; }
-  uint16_t largura() const { return largura_; }
-  uint16_t altura() const { return altura_; }
+  // A mais recente, ou nullptr se nenhuma foi tirada.
+  const Foto* ultima() const { return numero_ > 0 ? &fotos_[ultima_] : nullptr; }
+
+  // Uma foto pelo numero, se ainda estiver guardada.
+  const Foto* foto(uint32_t numero) const {
+    for (const Foto& f : fotos_) {
+      if (f.buf != nullptr && f.numero == numero) return &f;
+    }
+    return nullptr;
+  }
+
+  // Os numeros guardados, da mais nova para a mais velha.
+  uint8_t numeros(uint32_t* saida) const {
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < GUARDADAS; i++) {
+      const Foto& f = fotos_[(ultima_ + GUARDADAS - i) % GUARDADAS];
+      if (f.buf == nullptr) break;
+      saida[n++] = f.numero;
+    }
+    return n;
+  }
+
+  // A mais recente, campo a campo.
+  const uint8_t* buffer() const { return ultima() ? ultima()->buf : nullptr; }
+  size_t tamanho() const { return ultima() ? ultima()->tamanho : 0; }
+  uint16_t largura() const { return ultima() ? ultima()->largura : 0; }
+  uint16_t altura() const { return ultima() ? ultima()->altura : 0; }
 
 private:
   bool pronto_    = false;
   esp_err_t erro_ = ESP_OK;
 
-  uint8_t* buf_     = nullptr;
-  size_t tamanho_   = 0;
-  uint16_t largura_ = 0;
-  uint16_t altura_  = 0;
+  Foto fotos_[GUARDADAS];
+  uint8_t proxima_ = 0;  // onde a proxima captura entra
+  uint8_t ultima_  = 0;  // onde esta a mais recente
+  uint32_t numero_ = 0;  // quantas ja foram tiradas neste boot
 };
 
 }  // namespace cerebro

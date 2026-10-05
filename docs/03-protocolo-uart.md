@@ -118,7 +118,7 @@ sobra é o do corpo** — então o enlace carrega também o console do cérebro.
 
 | Linha | Sentido | Efeito |
 | --- | --- | --- |
-| `#<texto>` | cérebro → corpo | relato: o corpo mostra no USB como `[cam] <texto>`, não responde e não alimenta o failsafe |
+| `#<texto>` | cérebro → corpo | relato: o corpo mostra no USB como `[cerebro] <texto>`, não responde e não alimenta o failsafe |
 | `><texto>` | USB → corpo → cérebro | o resto da linha vale como digitado no console do cérebro (`>g`, `>?`) |
 | `PONTE` | só no USB do corpo | liga o USB direto ao enlace, byte a byte |
 | `PAREIA aa:bb:cc:dd:ee:ff` | só no USB do corpo | o corpo guarda o controle de PS4 que aceita e reinicia; quem manda é `scripts/pareia_ps4.py --corpo` |

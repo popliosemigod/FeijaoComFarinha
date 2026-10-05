@@ -58,6 +58,16 @@ bool tem_camera = false;
 bool servo1_alto = false;
 bool servo2_alto = false;
 
+// Teclas que chegam do corpo (`>p`, que o X do controle manda, ou `>?`
+// digitado no USB de la). A task do enlace so as guarda aqui; quem
+// executa e o loop(), como as do console - uma foto leva 1,5 s, e a
+// task do enlace nao pode parar o heartbeat esse tempo todo.
+QueueHandle_t do_corpo = nullptr;
+
+void recebeDoCorpo(const char* texto) {
+  for (const char* c = texto; *c != '\0'; c++) xQueueSend(do_corpo, c, 0);
+}
+
 // ---- Sentidos: o microfone, lido sem atrapalhar ninguem ------------
 void tarefaSentidos(void*) {
   static int16_t bloco[256];
@@ -143,7 +153,7 @@ void ajuda(Print& saida) {
   saida.println("  1 / 2      servo 1 / servo 2 para 45, depois 135");
   saida.println("  b          bipe no alto-falante");
   saida.println("  f          foto: mede um quadro da camera");
-  saida.println("  p          despeja a foto em base64");
+  saida.println("  p          foto: tira, guarda para a pagina e despeja em base64");
   saida.println("  o / q      escuta: manda cada frase ouvida para o PC transcrever / para");
   saida.println("  ?          estado de tudo (mostra a pagina, a rede e a senha dela)");
 }
@@ -164,6 +174,14 @@ void estado(Print& saida) {
                voz.picoEZera(), (unsigned long)voz.blocos());
   saida.printf("camera:      %s (sensor 0x%x)\n", tem_camera ? "ok" : "FALHOU",
                (unsigned)camera.sensor());
+  uint32_t numeros[cerebro::Camera::GUARDADAS];
+  const uint8_t guardadas = camera.numeros(numeros);
+  saida.printf("fotos:       %u guardadas", (unsigned)guardadas);
+  if (guardadas > 0) {
+    saida.printf(", da %lu a %lu", (unsigned long)numeros[guardadas - 1],
+                 (unsigned long)numeros[0]);
+  }
+  saida.println();
   saida.printf("voz:         escuta %s, %lu frases mandadas, fundo %.4f\n",
                voz.ligado() ? "LIGADA" : "desligada (`o` liga)", (unsigned long)voz.frases(),
                voz.fundo());
@@ -221,12 +239,24 @@ void executaComando(Print& saida, char c) {
     case 'b':
       if (tem_audio) alto_falante.bipe();
       break;
-    case 'p':
-      // Despeja a foto em base64. Pela serial ou pela rede - as duas
-      // sao so um Print, e a funcao nao sabe nem precisa saber qual.
+    case 'p': {
+      // Tira, guarda (e a foto que a pagina mostra) e despeja em base64.
+      // Pela serial ou pela rede - as duas sao so um Print, e a funcao
+      // nao sabe nem precisa saber qual. O corpo fica sabendo pelo
+      // relato: e assim que o X do controle aparece no log de la.
       saida.println("[camera] capturando...");
-      if (!camera.despeja(saida)) saida.println("[camera] falhou");
+      char relato[48];
+      if (tem_camera && camera.despeja(saida)) {
+        snprintf(relato, sizeof(relato), "foto %lu: %ux%u, %u bytes",
+                 (unsigned long)camera.ultima()->numero, (unsigned)camera.largura(),
+                 (unsigned)camera.altura(), (unsigned)camera.tamanho());
+      } else {
+        saida.println("[camera] falhou");
+        snprintf(relato, sizeof(relato), "foto FALHOU");
+      }
+      corpo.relata(relato);
       break;
+    }
     case 'f': {
       const size_t n = camera.mede();
       saida.printf("[camera] quadro de %u bytes\n", (unsigned)n);
@@ -260,6 +290,8 @@ void setup() {
   // O enlace com o corpo PRIMEIRO. Se alguma coisa abaixo travar, o
   // corpo ja esta recebendo heartbeat e o robo esta parado de forma
   // deliberada, em vez de parado por failsafe.
+  do_corpo = xQueueCreate(16, sizeof(char));
+  corpo.aoConsole(recebeDoCorpo);
   if (!corpo.begin()) {
     Serial.println("[cerebro] FALHA ao subir o enlace com o corpo");
   } else {
@@ -358,6 +390,14 @@ void loop() {
   // ---- Console pela serial ----------------------------------------
   while (Serial.available()) {
     executaComando(Serial, (char)Serial.read());
+  }
+
+  // ---- Console vindo do corpo ---------------------------------------
+  // A resposta sai no USB daqui: e la que `scripts/fotos.py` espera a
+  // foto. O corpo recebe so o relato curto.
+  char c;
+  while (do_corpo != nullptr && xQueueReceive(do_corpo, &c, 0) == pdTRUE) {
+    executaComando(Serial, c);
   }
 
   // ---- Console pela rede -------------------------------------------

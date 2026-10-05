@@ -30,8 +30,8 @@
 //
 //  Mesma observacao do outro lado: D6/D7 sao GPIO43/44, os pinos do
 //  UART0. Isto so e seguro porque o console sai pelo USB CDC.
-#define PIN_UART_TX 43  // D6 -> RX do corpo (GPIO20)
-#define PIN_UART_RX 44  // D7 <- TX do corpo (GPIO21)
+#define PIN_UART_TX 43  // D6 -> RX do corpo (GPIO16, RX2 da DevKit)
+#define PIN_UART_RX 44  // D7 <- TX do corpo (GPIO17, TX2 da DevKit)
 
 // ---- MAX98357A (I2S de saida) ---------------------------------------
 // SD solto: o amplificador liga sozinho. Alimentacao em 5V - os picos

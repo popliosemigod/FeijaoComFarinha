@@ -31,7 +31,7 @@
 //  valendo: se esta placa travar com o robo andando, ele para em 1 s.
 //
 //  TUDO ISTO TAMBEM SE LE E SE OPERA PELO USB DO CORPO: o relato sai
-//  pelo enlace (`#...`, que o corpo mostra como `[cam] ...`) e as
+//  pelo enlace (`#...`, que o corpo mostra como `[cerebro] ...`) e as
 //  teclas chegam por ele (`>g` no console do corpo). Na XIAO, que tem
 //  USB proprio, isso e conforto - um cabo so basta. Na ESP32-CAM e o
 //  unico caminho: o adaptador dela ocupa o header inteiro, e por isso

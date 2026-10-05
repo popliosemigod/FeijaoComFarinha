@@ -9,11 +9,13 @@
 //  O mapeamento e o menor que se dirige sem manual:
 //
 //    manche esquerdo   frente/tras anda, esquerda/direita vira
-//    X (cruz)          freia, enquanto apertado
+//    O (bolinha)       freia, enquanto apertado
+//    X (cruz)          tira uma foto (quem tira e o cerebro)
+//    L2 / R2           servo 1 / servo 2, proporcional ao aperto
 //
-//  A conta que transforma o manche em duas rodas (`mistura`) e pura e
-//  fica fora do bloco do Bluetooth: o autoteste a exercita numa placa
-//  sem controle nenhum.
+//  As contas que transformam manche e gatilho em rodas e servos
+//  (`mistura`, `anguloDoGatilho`) sao puras e ficam fora do bloco do
+//  Bluetooth: o autoteste as exercita numa placa sem controle nenhum.
 // =====================================================================
 #pragma once
 
@@ -60,6 +62,23 @@ public:
     dir = limita(((y - x) * 100) / 127);
     return x != 0 || y != 0;
   }
+
+  // Gatilho (0 solto, 255 no fim) para o angulo do servo: repouso solto,
+  // repouso + PS4_SERVO_CURSO no fim, preso na faixa do servo.
+  static int anguloDoGatilho(uint8_t v) {
+    const int a = SERVO_REPOUSO + ((int)v * PS4_SERVO_CURSO) / 255;
+    return a < 0 ? 0 : (a > 180 ? 180 : a);
+  }
+
+  // O que a mao esta fazendo agora.
+  struct Mao {
+    int esq = 0, dir = 0;  // rodas, de -100 a 100
+    bool mexeu = false;    // manche fora do centro
+    bool freio = false;    // O apertado
+    bool foto  = false;    // X apertado
+    uint8_t l2 = 0;        // gatilhos, de 0 a 255
+    uint8_t r2 = 0;
+  };
 
 #if FEIJAO_PS4_LIGADO
   // Sobe o Bluetooth com o proprio endereco desta placa - o que
@@ -128,10 +147,15 @@ public:
   bool falando() const { return (millis() - ultimo_ms_) < 200; }
   uint32_t relatorios() const { return relatorios_; }
 
-  // Le o estado atual. True se o manche esta fora do centro.
-  bool le(int& esq, int& dir, bool& freio) {
-    freio = PS4.Cross();
-    return mistura(PS4.LStickX(), -PS4.LStickY(), esq, dir);
+  // Le o estado atual.
+  Mao le() {
+    Mao m;
+    m.mexeu = mistura(PS4.LStickX(), -PS4.LStickY(), m.esq, m.dir);
+    m.freio = PS4.Circle();
+    m.foto  = PS4.Cross();
+    m.l2    = PS4.L2Value();
+    m.r2    = PS4.R2Value();
+    return m;
   }
 
   // A barra de luz diz que o robo esta ouvindo o controle.
@@ -147,11 +171,7 @@ public:
   static bool lembra(const char*) { return false; }
   bool falando() const { return false; }
   uint32_t relatorios() const { return 0; }
-  bool le(int& esq, int& dir, bool& freio) {
-    esq = dir = 0;
-    freio     = false;
-    return false;
-  }
+  Mao le() { return Mao(); }
   void acende(uint8_t, uint8_t, uint8_t) {}
 #endif
 

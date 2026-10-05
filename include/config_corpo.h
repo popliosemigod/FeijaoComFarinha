@@ -110,6 +110,16 @@
 // prioridade sobre o cerebro. Ver `main_corpo.cpp`.
 #define PS4_PRIORIDADE_MS 500
 
+// Gatilhos: L2 move o servo 1, R2 o servo 2. Solto, o servo fica em
+// SERVO_REPOUSO; apertado ate o fim, anda PS4_SERVO_CURSO graus a mais.
+// Negativo vira o sentido.
+#define PS4_SERVO_CURSO 90
+
+// X pede uma foto ao cerebro. Ela leva ~1,5 s (a camera descarta
+// quadros ate a exposicao assentar), entao pedido mais rapido que isto
+// e ignorado em vez de enfileirado.
+#define PS4_FOTO_INTERVALO_MS 2000
+
 // ---- PWM dos motores ------------------------------------------------
 //
 //  20 kHz fica acima da audicao: em 1 kHz a ponte canta, e num robo de
