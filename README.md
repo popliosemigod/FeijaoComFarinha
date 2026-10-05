@@ -6,9 +6,9 @@ celular. Duas placas: uma que pensa e uma que anda.
 <img src="evidencias/marcos/xiao-foto-20261005.jpg" alt="O que a câmera do robô vê" width="320">
 
 > **Estado (05/10/2026):** o firmware roda nas duas placas. O robô fotografa,
-> **transcreve fala**, tem página própria para dirigir e espera o controle de
-> PS4. **Nenhum motor foi visto girando, e as duas placas ainda não foram
-> ligadas entre si.** O caminho até aqui e o que falta:
+> **transcreve fala**, tem página própria para dirigir, e o **controle de PS4
+> conecta e comanda o corpo**. **Nenhum motor foi visto girando, e as duas
+> placas ainda não foram ligadas entre si.** O caminho até aqui e o que falta:
 > [`docs/00-resumo.md`](docs/00-resumo.md).
 
 ## Como é
@@ -79,7 +79,7 @@ passo em [`docs/06`](docs/06-montagem-do-corpo.md).
 
 ## Dirigir
 
-**Pelo controle de PS4.** Uma vez, com o controle no USB do PC:
+**Pelo controle de PS4.** Uma vez, com o controle e a DevKit no USB do PC:
 
 ```powershell
 python scripts/pareia_ps4.py --corpo COM4
@@ -123,13 +123,13 @@ python scripts/ouve.py --porta COM13               # fala para texto
 | Failsafe | para em **1001 ms** sem comando |
 | Câmera da XIAO (OV3660) | brilho médio 118 de 255 — a foto acima |
 | **Fala para texto** | 5 de 5 frases, 2,5 a 3,6 s cada, sem nuvem |
-| Bluetooth do corpo | no ar, esperando o controle |
+| **Controle de PS4** | conecta; manche e ✕ chegam ao corpo |
 | Rede própria do robô | no ar e visível; página de 2,2 KB |
 
 ## O que falta
 
-- **Ligar os três fios** entre a XIAO e a DevKit, e ver um motor girar.
-- **Parear o controle** e dirigir com ele; dirigir pelo celular.
+- **Ver um motor girar** — o controle já basta para isso.
+- **Ligar os três fios** entre a XIAO e a DevKit; dirigir pelo celular.
 - **O texto virar ordem:** o que o robô ouve aparece na tela do PC e para ali.
 - A **antena** da XIAO: sem ela, a rede do robô alcança poucos metros.
 - Servos, alto-falante, e voz de gente com o motor ligado.

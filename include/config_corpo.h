@@ -88,27 +88,17 @@
 //  So na DevKit: o C3 nao tem Bluetooth classico.
 //
 //  O controle de PS4 so se conecta ao endereco Bluetooth que ele
-//  guardou - o do console com que foi pareado. Dois jeitos de ele
-//  aceitar o robo, e `scripts/pareia_ps4.py` faz qualquer um deles com
-//  o controle no USB do PC:
+//  guardou, e confere a cada conexao uma chave que os dois lados tem que
+//  conhecer. `scripts/pareia_ps4.py --corpo`, com o controle e esta
+//  placa no USB do PC, grava no controle o endereco daqui e a chave, e
+//  conta a esta placa o endereco do controle - ela o guarda na NVS.
 //
-//    1. gravar no controle o endereco desta placa (PS4_MAC vazio)
-//    2. ler o endereco que o controle ja guarda e por em PS4_MAC: a
-//       placa passa a usa-lo, e o controle continua pareado ao console
-//
-//  PS4_MAC pode vir de `secrets.h`, como as credenciais do cerebro -
-//  nao e segredo, mas e de cada controle, e nao do projeto.
+//  Fingir ser o console (usar o endereco que o controle ja guarda) NAO
+//  funciona: falta a chave do console, e o controle desiste.
 #if !defined(CORPO_C3)
 #define TEM_PS4 1
 #else
 #define TEM_PS4 0
-#endif
-
-#if __has_include("secrets.h")
-#include "secrets.h"
-#endif
-#ifndef PS4_MAC
-#define PS4_MAC ""
 #endif
 
 // Raio morto dos manches, de 127. Abaixo disto o manche esta "no

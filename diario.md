@@ -768,3 +768,65 @@ biblioteca do PS4 e o `esptool_windows.py` sem efeito, como deve. O clang-format
 que o Windows não deixou rodar aqui reclamou de espaçamento em quatro arquivos;
 o diff veio do próprio job e entrou num commit à parte, sem mudar comportamento
 — as placas não foram regravadas por isso. Com ele, os dois jobs passaram.
+
+## 2026-10-05 (2) — O controle de PS4 conecta: faltava a chave
+
+Controle e DevKit no USB do PC. O controle já guardava o endereço do corpo
+(`3c:8a:1f:77:01:76`); sem o cabo, apertando PS, **piscava sem parar e não
+conectava**. O log do corpo não mostrava nada — a biblioteca só fala depois que
+o canal abre.
+
+### Achar o passo que falha
+
+O corpo passou a registrar os eventos do rádio (`[ps4] radio: ...`), e o log da
+biblioteca foi ligado numa gravação à parte (`FEIJAO_PS4_DEPURA`).
+
+| Tentativa | O que o rádio mostrou | Conclusão |
+| --- | --- | --- |
+| Como estava | chegou, **saiu em 0,35 s, motivo 0x113** (o controle encerrou); nenhum canal L2CAP aberto | o controle desiste antes do HID |
+| Apagar pareamentos velhos da placa (a dica do repositório original) | **zero** guardados | não era isso |
+| Cadastrar no corpo a chave do script | **motivo 0x105: falha de autenticação** | o controle confere uma chave, e a dele era outra |
+| A mesma chave, na ordem inversa | 0x105 de novo | a chave dele **não era a do script**: o endereço tinha sido gravado antes, com outra |
+| Gravar a chave do robô no controle, pelo cabo | **conectou**, barra verde | |
+
+**Por que piscava.** O DualShock 4 só se conecta ao endereço que guarda, e a cada
+conexão confere uma **chave de enlace** — os dois combinados pelo cabo, quando o
+PS4 pareia. O script gravava a chave no controle, mas o corpo não a conhecia:
+respondia "não tenho", e o controle desistia. O README da biblioteca só fala
+do endereço.
+
+**O conserto**, nos dois lados:
+
+- o corpo guarda na NVS o endereço do controle e, no boot, **antes de atender**,
+  cadastra a chave na pilha do Bluetooth (`BTA_DmAddDevice`, fora da API
+  pública — a biblioteca já usa o L2CAP do mesmo jeito). A pilha guarda a chave
+  de trás para a frente; assim conectou;
+- `scripts/pareia_ps4.py --corpo COM4` grava no controle o endereço do corpo e a
+  chave, e conta ao corpo qual controle aceitar (`PAREIA aa:bb:...`, só pelo USB);
+  o corpo reinicia já com a chave.
+
+**O que caiu junto:** a opção de o corpo se passar pelo console (`PS4_MAC`). Ela
+não tem como funcionar — falta a chave do console.
+
+### Medido
+
+| | Medido |
+| --- | --- |
+| Da chegada pelo rádio ao "controle conectado" | **0,6 s** |
+| Manche para a esquerda / direita | `M -100 100` / `M 100 -100` |
+| Manche de volta ao centro | `M 0 0` na hora |
+| ✕ | `X: freio` |
+| Pareamento depois de regravar o firmware | **continua** (fica na NVS) |
+
+O log do manche (`[ps4] M e d`) é o que prova, sem motor ligado, que a mão chega
+às rodas; sai no máximo a cada 150 ms, parada e freio na hora.
+
+`ASSERT_WARN(21 16), in lc_task.c` aparece a cada conexão. Vem do controlador
+Bluetooth fechado da Espressif, e não atrapalhou nenhuma.
+
+### O que não está provado
+
+- **Frente e trás no manche** só pelo autoteste: o log da bancada mostrou os
+  lados, o centro e o freio.
+- **Motor girando**: não visto nesta sessão.
+- Um segundo controle: o corpo aceita **um** de cada vez — parear outro troca.

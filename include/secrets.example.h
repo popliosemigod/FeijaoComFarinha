@@ -30,11 +30,6 @@
 // endereco da placa e aparece no console no boot.
 // #define AP_SENHA "uma-senha-sua"
 
-// Opcional, so no corpo: o endereco Bluetooth que o controle de PS4 ja
-// guarda. Sem ele, o corpo usa o proprio e `scripts/pareia_ps4.py`
-// grava esse no controle.
-// #define PS4_MAC "aa:bb:cc:dd:ee:ff"
-
 // ---- Servico de voz -------------------------------------------------
 // AINDA NAO DECIDIDO - ver docs/05-a-voz.md. Quando for, este e o
 // lugar do endereco e da credencial.

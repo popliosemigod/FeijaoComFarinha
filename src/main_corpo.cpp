@@ -59,6 +59,28 @@ bool controleManda() {
   return controle_estava && (millis() - controle_toque_ms) < PS4_PRIORIDADE_MS;
 }
 
+// O log do que a mao manda. E o que prova, na bancada e sem motor
+// ligado, que o manche chega nas rodas. No maximo um a cada 150 ms com
+// o manche em movimento - o controle manda dezenas de relatorios por
+// segundo -, mas parada e freio saem na hora.
+void relataControle(int esq, int dir, bool freio) {
+  static int esq_dito = 0, dir_dito = 0;
+  static bool freio_dito  = false;
+  static uint32_t dito_ms = 0;
+  if (esq == esq_dito && dir == dir_dito && freio == freio_dito) return;
+  const bool urgente = freio != freio_dito || (esq == 0 && dir == 0);
+  if (!urgente && (millis() - dito_ms) < 150) return;
+  esq_dito   = esq;
+  dir_dito   = dir;
+  freio_dito = freio;
+  dito_ms    = millis();
+  if (freio) {
+    Serial.println("[ps4] X: freio");
+  } else {
+    Serial.printf("[ps4] M %d %d\n", esq, dir);
+  }
+}
+
 uint32_t ultimo_movimento_ms = 0;  // alimenta o failsafe
 uint32_t ultimo_tick_ms      = 0;
 bool failsafe_disparado      = false;
@@ -192,6 +214,35 @@ bool ehPonte(const char* linha) {
   return true;
 }
 
+// `PAREIA aa:bb:cc:dd:ee:ff`, so pelo USB: o controle que esta placa
+// passa a aceitar. Quem manda e `scripts/pareia_ps4.py --corpo`, logo
+// depois de gravar no controle o endereco daqui - os dois lados do
+// pareamento de uma vez, como o PS4 faz pelo cabo. Devolve o resto da
+// linha, ou nullptr se a linha nao e esta.
+const char* ehPareia(const char* linha) {
+  static const char ALVO[] = "PAREIA ";
+  for (uint8_t i = 0; i < sizeof(ALVO) - 1; i++) {
+    char c = linha[i];
+    if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+    if (c != ALVO[i]) return nullptr;
+  }
+  return linha + sizeof(ALVO) - 1;
+}
+
+void pareia(const char* mac) {
+  if (!corpo::ControlePS4::lembra(mac)) {
+    Serial.printf("[ps4] PAREIA recusado: %s\n", mac);
+    return;
+  }
+  // A chave entra na pilha do Bluetooth no boot, antes de a placa
+  // atender - entao reinicia. Motor parado antes, por educacao.
+  motores.para();
+  Serial.printf("[ps4] controle %s guardado, reiniciando\n", mac);
+  Serial.flush();
+  delay(50);
+  ESP.restart();
+}
+
 }  // namespace
 
 void setup() {
@@ -234,9 +285,14 @@ void setup() {
   // controle existir, e um Bluetooth que nao sobe nao derruba nada.
   tem_controle = controle.begin();
   if (tem_controle) {
-    Serial.printf("[ps4] esperando o controle. Endereco desta placa: %s\n",
-                  controle.endereco().c_str());
-    Serial.println("[ps4] parear: scripts/pareia_ps4.py, com o controle no USB do PC");
+    Serial.printf("[ps4] Endereco desta placa: %s\n", controle.endereco().c_str());
+    if (controle.conhecido().length() > 0) {
+      Serial.printf("[ps4] esperando o controle %s\n", controle.conhecido().c_str());
+    } else {
+      Serial.println(
+          "[ps4] nenhum controle pareado: scripts/pareia_ps4.py --corpo <porta>,"
+          " com o controle no USB do PC");
+    }
   } else if (TEM_PS4) {
     Serial.println("[ps4] FALHOU ao subir o Bluetooth - seguindo so com o cerebro");
   }
@@ -277,6 +333,8 @@ void loop() {
         Serial1.print('\n');
       } else if (ehPonte(console.texto())) {
         ponte();
+      } else if (const char* mac = ehPareia(console.texto())) {
+        pareia(mac);
       } else {
         const protocolo::Comando c = protocolo::interpreta(console.texto());
         Serial.printf("[console] %s\n", console.texto());
@@ -308,8 +366,10 @@ void loop() {
       if (freio || mexeu) {
         if (freio) {
           motores.para();
+          relataControle(0, 0, true);
         } else {
           motores.velocidade(esq, dir);
+          relataControle(esq, dir, false);
         }
         controle_dirigindo  = true;
         controle_toque_ms   = agora;
@@ -319,6 +379,7 @@ void loop() {
         // Manche de volta ao centro: o robo para, e o cerebro so
         // retoma depois de PS4_PRIORIDADE_MS.
         motores.velocidade(0, 0);
+        relataControle(0, 0, false);
         controle_dirigindo = false;
       }
     }

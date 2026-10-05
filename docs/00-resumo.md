@@ -26,6 +26,7 @@ girando, e as duas ainda não foram ligadas entre si.**
 | 01/10 | **Fala para texto** | A placa recorta cada frase e manda pelo USB; o PC transcreve com Whisper, sem nuvem. Primeira tentativa: 1 frase de 3 — o ruído de fundo subia junto com a fala fraca. Corrigido: **5 de 5**, quase literais |
 | 05/10 | **A DevKit vira o corpo; controle de PS4 e página para dirigir** | O PS4 fala Bluetooth clássico, que só o ESP32 clássico tem. O Bluepad32 exigiria trocar o core; a biblioteca PS4Controller compilou no core 3.x. A XIAO cria a própria rede e serve uma página mínima: foto e direcional |
 | 05/10 | **As fotos escuras da XIAO** | O teto de ganho pensado para o OV2640 virava 0,375× no OV3660 da XIAO. Corrigido: brilho de **24 para 118** de 255, na mesma cena |
+| 05/10 | **O controle de PS4 de verdade** | Piscava sem conectar: chegava ao corpo e desistia em 0,35 s. Ele confere uma **chave de enlace** a cada conexão, e o corpo não a conhecia. Agora o script grava a chave no controle e conta ao corpo qual controle aceitar: **conectou, e o manche chega às rodas** |
 
 ## Como está hoje
 
@@ -43,14 +44,14 @@ girando, e as duas ainda não foram ligadas entre si.**
   em 1001 ms.
 - **XIAO:** câmera (OV3660) com brilho médio 118 de 255, microfone PDM, 8 MB de
   PSRAM, e **fala para texto** — 5 frases de voz sintética, todas transcritas.
-- **DevKit:** Bluetooth clássico no ar, esperando o controle.
+- **Controle de PS4 conectado à DevKit**: manche para os lados vira `M -100 100`
+  e `M 100 -100`, soltar dá `M 0 0`, ✕ freia — visto no log do corpo.
 - **Rede própria do robô** no ar e visível do PC; a página foi conferida num
   navegador.
 
 **Não provado**
 
 - **Motor girando**, e as duas placas conversando: faltam os três fios.
-- **O controle de PS4 conectado**: falta parear (precisa do controle no USB).
 - **Dirigir pelo celular**: a página não foi aberta num telefone ainda.
 - **O texto virar ordem.** Hoje ele aparece na tela do PC e para ali.
 - Fala de gente, e com o motor ligado; servos; alto-falante.
@@ -63,9 +64,9 @@ sozinho**, ouve, fala, vê, e é o mesmo personagem do
 
 O que falta, na ordem em que destrava o resto:
 
-1. **Ligar os três fios** entre as placas (D6 → GPIO16, D7 → GPIO17, GND) e
-   ver o motor girar.
-2. **Parear o controle** (`scripts/pareia_ps4.py --corpo COM4`) e dirigir.
+1. **Ver o motor girar** — pelo controle, que já conecta; o cérebro nem precisa
+   estar ligado.
+2. **Ligar os três fios** entre as placas (D6 → GPIO16, D7 → GPIO17, GND).
 3. **Dirigir pelo celular**, com a antena da XIAO no lugar.
 4. **O texto virar ordem:** o que foi transcrito voltar para o robô como
    intenção (andar, parar, virar), com a parada valendo antes de tudo.
@@ -79,7 +80,7 @@ O que falta, na ordem em que destrava o resto:
 ```powershell
 pio run -e cerebro -t upload --upload-port COM13   # grava a XIAO
 pio run -e corpo   -t upload --upload-port COM4    # grava a DevKit
-python scripts/pareia_ps4.py --corpo COM4          # pareia o controle (no USB do PC)
+python scripts/pareia_ps4.py --corpo COM4          # pareia (controle e DevKit no USB)
 python scripts/ouve.py --porta COM13               # fala para texto
 ```
 

@@ -121,6 +121,7 @@ sobra é o do corpo** — então o enlace carrega também o console do cérebro.
 | `#<texto>` | cérebro → corpo | relato: o corpo mostra no USB como `[cam] <texto>`, não responde e não alimenta o failsafe |
 | `><texto>` | USB → corpo → cérebro | o resto da linha vale como digitado no console do cérebro (`>g`, `>?`) |
 | `PONTE` | só no USB do corpo | liga o USB direto ao enlace, byte a byte |
+| `PAREIA aa:bb:cc:dd:ee:ff` | só no USB do corpo | o corpo guarda o controle de PS4 que aceita e reinicia; quem manda é `scripts/pareia_ps4.py --corpo` |
 
 `PONTE` existe para gravar firmware no cérebro sem o adaptador
 ([`atualiza_serial.h`](../src/atualiza_serial.h),
@@ -129,8 +130,9 @@ está aberta o corpo **não interpreta nada** — um bloco de firmware pode cont
 `M 100 100` por acaso —, e por isso as pontes H ficam **soltas** do começo ao
 fim. Fecha sozinha depois de 5 s sem byte vindo do USB.
 
-Nenhuma das três muda o parser de movimento: `#` e `>` são desviadas antes de
-ele ser chamado, e `PONTE` só é aceita pelo console USB, nunca pelo enlace.
+Nenhuma delas muda o parser de movimento: `#` e `>` são desviadas antes de ele
+ser chamado, e `PONTE` e `PAREIA` só são aceitas pelo console USB, nunca pelo
+enlace.
 
 ## Quatro propostas — decisão do Henrique
 
