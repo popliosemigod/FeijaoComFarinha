@@ -668,3 +668,97 @@ de memória, sem datasheet na mão. O que ficou foi só a identificação do sen
 
 A foto escura entrou em `evidencias/marcos/` do jeito que saiu, com a legenda
 dizendo que a sala estava escura. Com luz, é `p` no console e trocar o arquivo.
+
+---
+
+## 2026-10-05 — A DevKit vira o corpo: controle de PS4, e uma página para dirigir
+
+Henrique decidiu seguir com uma **ESP32 DevKit** comum no lugar do C3, e
+acrescentar duas formas de dirigir: o **controle de PS4** e uma **página web**
+servida pelo robô, o mais minimalista possível. O resto fica igual: o cérebro é
+a XIAO Sense, com a voz e a câmera dela.
+
+### Por que a DevKit resolve o controle
+
+O DualShock 4 fala **Bluetooth clássico**. O C3 e a S3 só fazem BLE; o ESP32
+clássico é o único da família que ainda tem o clássico. Então o controle mora no
+corpo, e isso tem uma vantagem que não foi planejada: ele continua valendo com o
+cérebro travado, desligado ou regravando a si próprio.
+
+**A biblioteca.** O Bluepad32 (que pareia sem truque nenhum) só existe dentro de
+um core Arduino próprio, mais antigo, ou num projeto ESP-IDF — trocar qualquer
+um dos dois mudaria a estrutura inteira do repositório. A
+[PS4Controller](https://github.com/pablomarquez76/PS4_Controller_Host), de Juan
+Pablo Marquez, compilou no core 3.x que o projeto já usa, e entrou fixa num
+commit.
+
+**O preço dela é o pareamento:** o controle só se conecta ao endereço que
+guarda. `scripts/pareia_ps4.py` lê esse endereço pelo USB do controle e grava o
+do robô no lugar — o que o SixaxisPairTool faz, sem instalar programa nenhum.
+
+### A pinagem da DevKit
+
+As duas pontes em **cinco pinos seguidos** de um lado (32, 33, 25, 26, 27);
+servos (19, 18) e enlace (RX2/TX2, 16 e 17) lado a lado do outro. Nenhum pino
+de *strapping*, e o console fica no UART0, que é o USB da placa — log e enlace
+nunca dividem fio, a armadilha que o C3 tinha.
+
+### Quem tem a vez
+
+Três caminhos movem o robô agora. As regras ficaram em `docs/03`:
+
+- o **controle ganha** enquanto é usado, e até 500 ms depois — o `M` do cérebro
+  recebe `OK` e não move nada;
+- **`STOP` vale sempre**;
+- o controle **alimenta o mesmo failsafe**, e desconectar no meio para na hora;
+- o **celular** só move com o dedo na seta: sem repetição por 400 ms, o cérebro
+  para o robô — porque o failsafe do corpo vê o cérebro vivo, e não o telefone
+  morto.
+
+### A página e a rede própria
+
+Sem `secrets.h`, o cérebro **cria a própria rede** (`feijao-com-farinha`) e a
+página fica em `192.168.4.1`. A senha sai do endereço da placa — o repositório é
+público, e uma senha padrão escrita aqui seria a de todo robô igual a este. A
+página tem 2,2 KB: a foto em cima, cinco teclas embaixo, nada mais.
+
+### Medido
+
+| | Previsto | Medido |
+| --- | --- | --- |
+| Autoteste na DevKit | 62 passam | **62 de 62, em 213 ms** |
+| Bluetooth no primeiro boot | sobe | **não subiu**: `ESP_ERR_INVALID_STATE` |
+| Bluetooth com `btInUse()` | sobe | **sobe**, endereço `3c:8a:1f:77:01:76` |
+| Rede própria da XIAO | visível | **visível, -79 dBm** a meio metro do PC |
+| Brilho médio da foto, antes | — | **24 de 255** |
+| Brilho médio da foto, depois | — | **118 de 255**, mesma cena |
+
+**O Bluetooth que não subia.** O core 3.x libera a memória do Bluetooth antes do
+`setup()`, a menos que o programa declare `btInUse()`. A biblioteca não declara,
+e o erro (`initialize controller failed`) não fala em memória. Uma função de
+três linhas em `main_corpo.cpp`.
+
+**As fotos escuras da XIAO, uma semana depois.** No dia 01 eu concluí que "com
+pouca luz esta câmera não vai além", depois de quatro tentativas de clarear. Era
+falso. O sensor da XIAO é um **OV3660**, e o `set_gainceiling(GAINCEILING_128X)`
+escrito para o OV2640 grava, no OV3660, o número cru do enum num registrador que
+conta em dezesseis avos: **o "128×" virava um teto de 0,375×**. O ajuste para
+pouca luz escurecia a câmera. Achado lendo o driver, quando três fotos seguidas
+deram o mesmo brilho — exposição estável e escura demais para ser só a sala.
+
+**`-79 dBm` ao lado do PC** diz que a antena externa da XIAO não está encaixada.
+Sem ela, a rede do robô alcança poucos metros.
+
+### A máquina, de novo
+
+O Windows passou a bloquear o `esptool.exe` do PlatformIO (`Error 4551`, Device
+Guard), e toda compilação parou no `bootloader.bin`. O mesmo esptool roda pelo
+Python do penv: `scripts/esptool_windows.py` troca o `.exe` por um `.cmd` de uma
+linha, só no Windows.
+
+### O que não está provado
+
+- **Motor girando** e as placas conversando: os três fios não estão ligados.
+- **O controle conectado**: não havia controle no USB para parear.
+- **Dirigir pelo celular**: entrar na rede do robô derrubaria a internet do PC,
+  então a página foi conferida num navegador local, não num telefone.

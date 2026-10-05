@@ -77,7 +77,19 @@ public:
     if (pronto_) {
       sensor_t* s = esp_camera_sensor_get();
       if (s != nullptr) {
-        s->set_gainceiling(s, GAINCEILING_128X);
+        // A MESMA FUNCAO, OUTRA UNIDADE, e isto escureceu a XIAO por
+        // uma semana. No OV2640 o argumento e um enum (6 = 128x). No
+        // OV3660 o driver grava o numero CRU no teto de ganho, que conta
+        // em dezesseis avos: o 6 do enum virava teto de 0,375x - menos
+        // que ganho unitario - e toda foto saia com brilho medio 24 de
+        // 255, de dia ou de noite. 0x200 sao 32x nessa unidade.
+        // Achado em 05/10/2026, lendo o driver depois de quatro
+        // tentativas de clarear a foto pelo lado errado.
+        if (s->id.PID == OV3660_PID) {
+          s->set_gainceiling(s, (gainceiling_t)0x200);
+        } else {
+          s->set_gainceiling(s, GAINCEILING_128X);
+        }
         s->set_brightness(s, 1);
         s->set_gain_ctrl(s, 1);      // ganho automatico ligado
         s->set_exposure_ctrl(s, 1);  // exposicao automatica ligada

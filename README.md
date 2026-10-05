@@ -1,70 +1,67 @@
 # Feijão com Farinha
 
-Robô móvel que anda, ouve e vê. Duas placas: uma que pensa e uma que anda.
+Robô móvel que anda, ouve e vê — e que se dirige pelo controle de PS4 ou pelo
+celular. Duas placas: uma que pensa e uma que anda.
 
-> **Estado (01/10/2026):** o firmware roda nas duas placas. A câmera fotografa, o
-> robô **transcreve fala**, e o failsafe foi medido.
-> **Nenhum motor foi visto girando, e as duas placas atuais ainda não conversaram.**
-> O caminho até aqui e o que falta: [`docs/00-resumo.md`](docs/00-resumo.md).
+<img src="evidencias/marcos/xiao-foto-20261005.jpg" alt="O que a câmera do robô vê" width="320">
+
+> **Estado (05/10/2026):** o firmware roda nas duas placas. O robô fotografa,
+> **transcreve fala**, tem página própria para dirigir e espera o controle de
+> PS4. **Nenhum motor foi visto girando, e as duas placas ainda não foram
+> ligadas entre si.** O caminho até aqui e o que falta:
+> [`docs/00-resumo.md`](docs/00-resumo.md).
 
 ## Como é
 
 ```mermaid
 flowchart LR
-  PC([PC]) -- "USB-C" --- X
-  X["XIAO ESP32-S3 Sense<br/>o cérebro<br/>câmera · microfone · Wi-Fi"]
-  C["ESP32-C3 SuperMini<br/>o corpo<br/>para sozinho em 1 s"]
-  X -- "D6 → GPIO20" --> C
-  C -- "GPIO21 → D7" --> X
-  C -- "GPIO0 · GPIO1" --> PE["ponte H esquerda"] --> ME(("motor"))
-  C -- "GPIO3 · GPIO4" --> PD["ponte H direita"] --> MD(("motor"))
-  C -- "GPIO5 · GPIO6" --> S["2 servos"]
-  X -- "D0 · D1 · D2" --> A["amplificador"] --> F(("alto-falante"))
+  P([controle PS4]) -. "Bluetooth" .-> C
+  T([celular]) -. "Wi-Fi" .-> X
+  X["XIAO ESP32-S3 Sense<br/>o cérebro<br/>câmera · microfone"]
+  C["ESP32 DevKit<br/>o corpo<br/>para sozinho em 1 s"]
+  X -- "D6 → GPIO16" --> C
+  C -- "GPIO17 → D7" --> X
+  C -- "32 · 33" --> PE["ponte H esquerda"] --> ME(("motor"))
+  C -- "25 · 26" --> PD["ponte H direita"] --> MD(("motor"))
+  C -- "19 · 18" --> S["2 servos"]
 ```
 
 O cérebro decide e manda comandos de texto pela serial (`M 40 40`, `STOP`). O
-corpo obedece — e **para sozinho se o cérebro calar por 1 segundo**. O pior caso
-de qualquer defeito no cérebro é o robô parar, nunca sair andando.
+corpo obedece — e **para sozinho se o cérebro calar por 1 segundo**. O controle
+de PS4 fala direto com o corpo, e enquanto alguém mexe nele, **ele tem a
+prioridade**. `STOP` vale sempre, venha de quem vier.
 
 ## Pinagem
 
 ### Cérebro ↔ corpo — três fios
 
-| XIAO S3 Sense | ESP32-C3 |
+| XIAO S3 Sense | ESP32 DevKit |
 | --- | --- |
-| **D6** (GPIO43, TX) | **GPIO20** (RX) |
-| **D7** (GPIO44, RX) | **GPIO21** (TX) |
+| **D6** (TX) | **GPIO16** (RX2) |
+| **D7** (RX) | **GPIO17** (TX2) |
 | **GND** | **GND** |
 
 Ligação direta e cruzada, 3,3 V dos dois lados, sem resistor.
 
-### Corpo (ESP32-C3) → pontes H e servos
+### Corpo (ESP32 DevKit) → pontes H e servos
 
-| ESP32-C3 | Vai em |
+| ESP32 DevKit | Vai em |
 | --- | --- |
-| **GPIO0** | ponte **esquerda**, RPWM |
-| **GPIO1** | ponte **esquerda**, LPWM |
-| **GPIO3** | ponte **direita**, RPWM |
-| **GPIO4** | ponte **direita**, LPWM |
-| **GPIO10** | R_EN + L_EN **das duas** pontes, juntos — e **10 kΩ deste ponto ao GND** |
-| **GPIO5** | servo 1, sinal |
-| **GPIO6** | servo 2, sinal |
-| **3,3 V** | VCC lógico das duas pontes |
+| **GPIO32** | ponte **esquerda**, RPWM |
+| **GPIO33** | ponte **esquerda**, LPWM |
+| **GPIO25** | ponte **direita**, RPWM |
+| **GPIO26** | ponte **direita**, LPWM |
+| **GPIO27** | R_EN + L_EN **das duas** pontes, juntos — e **10 kΩ deste ponto ao GND** |
+| **GPIO19** | servo 1, sinal |
+| **GPIO18** | servo 2, sinal |
+| **3V3** | VCC lógico das duas pontes |
 
-Pontes BTS7960 (módulo IBT-2). Os motores vão nos bornes M+ / M− de cada ponte,
-e a bateria nos bornes B+ / B−.
+As pontes ocupam **cinco pinos seguidos** de um lado da DevKit (32, 33, 25, 26,
+27); servos e enlace ficam lado a lado do outro. Nenhum é pino de *strapping*.
+Pontes BTS7960 (módulo IBT-2): motores nos bornes M+ / M−, bateria em B+ / B−.
 
-### Cérebro (XIAO) → amplificador
-
-| XIAO S3 Sense | MAX98357A |
-| --- | --- |
-| **D0** (GPIO1) | BCLK |
-| **D1** (GPIO2) | LRC |
-| **D2** (GPIO3) | DIN |
-| **5 V** | VIN |
-
-A **câmera** e o **microfone** já estão na placa Sense: nenhum fio.
-Livres na XIAO: D3, D4, D5.
+A **câmera** e o **microfone** já estão na XIAO: nenhum fio. O amplificador,
+quando chegar, vai em D0, D1 e D2 ([`docs/01`](docs/01-hardware-e-pinagem.md)).
 
 ### Alimentação
 
@@ -73,75 +70,69 @@ Livres na XIAO: D3, D4, D5.
 | Motores | bateria, no borne grosso das pontes |
 | Lógica das pontes | **3,3 V** — não 5 V |
 | Servos | regulador próprio de 5–6 V, **≥ 2 A** — nunca pela placa |
-| XIAO e amplificador | **5 V** |
+| XIAO (pino 5V) e DevKit (pino VIN) | **5 V** |
 | **GND** | **o mesmo ponto para tudo** |
 
 Um capacitor de 470–1000 µF perto das pontes e outro perto dos servos. Os
-porquês de cada linha estão em
-[`docs/02`](docs/02-ligacoes-e-alimentacao.md); a montagem passo a passo, com um
-teste ao fim de cada etapa, em [`docs/06`](docs/06-montagem-do-corpo.md).
+porquês em [`docs/02`](docs/02-ligacoes-e-alimentacao.md); a montagem passo a
+passo em [`docs/06`](docs/06-montagem-do-corpo.md).
 
-## Usar
+## Dirigir
+
+**Pelo controle de PS4.** Uma vez, com o controle no USB do PC:
+
+```powershell
+python scripts/pareia_ps4.py --corpo COM4
+```
+
+Tire o cabo e aperte **PS**: a barra de luz fica verde quando o robô aceita.
+Manche esquerdo anda e vira; **✕** freia.
+
+**Pelo celular.** Entre na rede Wi-Fi **feijao-com-farinha** — a senha aparece
+no console do cérebro no boot e no `?` — e abra **http://192.168.4.1**. Segurar
+uma seta anda, soltar para; tocar na imagem tira uma foto. Se o telefone some, o
+robô para em 0,4 s. Com `include/secrets.h` preenchido, o robô entra na rede de
+casa no lugar de criar a própria.
+
+**Pelo console**, com a XIAO no USB (`pio device monitor -p COM13`), teclas sem
+Enter: `w` `a` `s` `d` `x` movem, `p` foto, `o` / `q` liga e desliga a escuta,
+`?` estado. **O robô nunca anda sozinho ao ligar.**
+
+## Gravar e usar
 
 ```powershell
 pio run -e cerebro -t upload --upload-port COM13   # grava a XIAO
-pio run -e corpo   -t upload --upload-port COM7    # grava o C3
-pio device monitor -p COM13                        # console do cérebro
+pio run -e corpo   -t upload --upload-port COM4    # grava a DevKit
 python scripts/ouve.py --porta COM13               # fala para texto
 ```
 
-No console do cérebro, as teclas valem sem Enter:
-
-| Tecla | |
-| --- | --- |
-| `w` `a` `s` `d` `x` | frente, esquerda, ré, direita, parar |
-| `1` `2` | servo 1, servo 2 |
-| `p` | tira uma foto e despeja em base64 |
-| `o` / `q` | liga / desliga a escuta de frases |
-| `t` | rotina de teste: anda, para, gira, mexe os servos |
-| `?` | estado de tudo |
-
-O corpo também aceita comando direto, pelo USB dele: `M 40 40` anda a 40 % — e o
-failsafe para em 1 s. O protocolo inteiro está em
-[`docs/03`](docs/03-protocolo-uart.md).
-
-**O robô nunca anda sozinho ao ligar.** Só por tecla.
-
 | Ambiente | Placa | |
 | --- | --- | --- |
-| **`cerebro`** | XIAO S3 Sense | o cérebro — **o que está gravado** |
-| **`corpo`** | ESP32-C3 | motores, servos, failsafe — **o que está gravado** |
+| **`cerebro`** | XIAO S3 Sense | câmera, microfone, página — **gravado** |
+| **`corpo`** | ESP32 DevKit | motores, servos, failsafe, PS4 — **gravado** |
 | `teste_som` | XIAO S3 Sense | teste simples: um som alto faz andar 1,5 s |
-| `autoteste` | ESP32-C3 | a lógica das duas placas, sem hardware |
-| `cerebro_cam`, `teste_som_cam` | ESP32-CAM | os mesmos, na placa reserva |
-| `bancada` | ESP32-C3 | o corpo com log detalhado |
+| `autoteste` | ESP32 DevKit | a lógica das duas placas, sem hardware |
+| `bancada` | ESP32 DevKit | o corpo com log detalhado |
+| `corpo_c3`, `cerebro_cam`, `teste_som_cam` | C3 e ESP32-CAM | as placas reserva |
 
 ## O que já funciona
 
 | | Medido |
 | --- | --- |
-| Autoteste da lógica, no C3 | 56 de 56 |
+| Autoteste da lógica, na DevKit | 62 de 62, em 213 ms |
 | Failsafe | para em **1001 ms** sem comando |
-| Câmera da XIAO | foto de 320×240; sensor OV3660 |
-| Microfone da XIAO | silêncio 0,001 · voz 0,01 a 0,055 |
+| Câmera da XIAO (OV3660) | brilho médio 118 de 255 — a foto acima |
 | **Fala para texto** | 5 de 5 frases, 2,5 a 3,6 s cada, sem nuvem |
-| Gravar a ESP32-CAM pela serial | 354 KB em 43 s, sem adaptador |
-
-| Primeira foto do projeto — ESP32-CAM, 29/09 | Primeira foto da XIAO — 01/10, sala à noite |
-| --- | --- |
-| ![Primeira foto da ESP32-CAM, 320x240](evidencias/marcos/primeira-foto-20260929.jpg) | ![Primeira foto da XIAO S3 Sense, 320x240, sala escura](evidencias/marcos/xiao-primeira-foto-20261001.jpg) |
-
-As duas saíram em base64 pelo console (`p`). A da XIAO é escura porque a sala
-estava escura: o ganho já está no teto, e com pouca luz esta câmera não vai além.
+| Bluetooth do corpo | no ar, esperando o controle |
+| Rede própria do robô | no ar e visível; página de 2,2 KB |
 
 ## O que falta
 
-- **Ver um motor girar.** O corpo recebe o comando; ninguém confirmou a roda.
-- **Ligar a XIAO ao C3** — os três fios da tabela acima.
+- **Ligar os três fios** entre a XIAO e a DevKit, e ver um motor girar.
+- **Parear o controle** e dirigir com ele; dirigir pelo celular.
 - **O texto virar ordem:** o que o robô ouve aparece na tela do PC e para ali.
-- Servos, alto-falante, Wi-Fi (console por rede, foto pelo celular).
-- Voz de gente, e com o motor ligado: a transcrição só foi medida com voz
-  sintética, numa sala em silêncio.
+- A **antena** da XIAO: sem ela, a rede do robô alcança poucos metros.
+- Servos, alto-falante, e voz de gente com o motor ligado.
 
 ## Documentação
 
@@ -150,32 +141,32 @@ estava escura: o ganho já está no teto, e com pouca luz esta câmera não vai 
 | **[00](docs/00-resumo.md)** | **resumo: o caminho até aqui, como está, o que falta** |
 | [01](docs/01-hardware-e-pinagem.md) | as placas, a pinagem completa, e por que são duas |
 | [02](docs/02-ligacoes-e-alimentacao.md) | alimentação, GND, capacitores, o BTS7960 em 3,3 V |
-| [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe, o console e a gravação pelo enlace |
+| [03](docs/03-protocolo-uart.md) | o protocolo, o failsafe, quem tem a vez, o console pelo enlace |
 | [04](docs/04-roteiro-de-bancada.md) | roteiro de ensaios, com as previsões escritas antes |
 | [05](docs/05-a-voz.md) | a voz: o que já ouve, e o que falta decidir |
 | [06](docs/06-montagem-do-corpo.md) | montagem passo a passo |
-| [07](docs/07-reconhecimento-de-objetos.md) | reconhecimento de objetos e foto pelo celular |
+| [07](docs/07-reconhecimento-de-objetos.md) | reconhecimento de objetos |
 | [diário](diario.md) | cada sessão: previsto, medido, e o que deu errado |
 
 ## Notas
 
 **Windows.** Rode o `pio` pelo PowerShell (o instalador dos toolchains recusa o
 Git Bash) e, se a instalação falhar com `FileNotFoundError` num caminho enorme,
-encurte o cache: `$env:PLATFORMIO_CACHE_DIR = "C:\Users\<voce>\.pc"`. É o limite
-de 260 caracteres do Windows; no Linux e no CI não acontece.
+encurte o cache: `$env:PLATFORMIO_CACHE_DIR = "C:\Users\<voce>\.pc"`. Se o
+Windows bloquear o `esptool.exe` (`Error 4551`), o projeto já contorna sozinho:
+[`scripts/esptool_windows.py`](scripts/esptool_windows.py).
 
-**ESP32-CAM, a placa reserva.** Foi o cérebro enquanto a XIAO estava em outro
-projeto, e o firmware continua compilando para ela. Custa um microfone externo
-(INMP441), um resistor de 10 kΩ no GPIO12 e um adaptador USB que ocupa o header
-inteiro — por isso nela o console e a gravação passam pelo USB do corpo. Pinagem
-e ressalvas em [`docs/01`](docs/01-hardware-e-pinagem.md#a-esp32-cam-como-cérebro--o-plano-b).
-
-**Wi-Fi.** Preencha `include/secrets.h` (copie de `secrets.example.h`) e o robô
-sobe com console em `telnet <ip> 23` e uma página de foto em `http://<ip>/`.
-Escrito e compilando; ainda não rodou numa placa.
+**Placas reserva.** O corpo já foi um ESP32-C3 SuperMini, e o cérebro uma
+ESP32-CAM; o firmware continua compilando para os dois. O C3 não tem Bluetooth
+clássico, então sem controle de PS4; a CAM precisa de microfone externo e de um
+adaptador USB que ocupa o header inteiro. Detalhes em
+[`docs/01`](docs/01-hardware-e-pinagem.md).
 
 ## Crédito
 
 Projeto do laboratório [Jaspy](https://github.com/popliosemigod/Jaspy). O
 desenho do corpo — limites como único caminho até o hardware, e o firmware que
 compila sem `secrets.h` — vem do `firmware/jaspy-corpo` daquele repositório.
+O controle de PS4 usa a biblioteca
+[PS4Controller](https://github.com/pablomarquez76/PS4_Controller_Host), de Juan
+Pablo Marquez.

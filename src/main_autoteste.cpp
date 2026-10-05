@@ -21,6 +21,7 @@
 #include <Arduino.h>
 
 #include "config_corpo.h"
+#include "controle_ps4.h"
 #include "linha.h"
 #include "motores.h"
 #include "protocolo.h"
@@ -247,6 +248,30 @@ void secaoRampa() {
                 RAMPA_SUBIDA_MS == 0 ? "comando vale na hora" : "rampa ativa");
 }
 
+// ---- O manche do PS4 virando duas rodas ------------------------------
+void secaoManche() {
+  Serial.println("\n[7] o manche do PS4 (a conta, sem controle)");
+  int e = 0, d = 0;
+
+  // O centro e o raio morto: um controle de verdade nunca devolve zero
+  // exato, e sem raio morto o robo anda sozinho.
+  confere("centro nao mexe", !corpo::ControlePS4::mistura(0, 0, e, d) && e == 0 && d == 0);
+  confere("folga do manche nao mexe", !corpo::ControlePS4::mistura(PS4_RAIO_MORTO - 1,
+                                                                   -(PS4_RAIO_MORTO - 1), e, d));
+
+  corpo::ControlePS4::mistura(0, 127, e, d);
+  confere("manche todo para a frente: 100 e 100", e == 100 && d == 100);
+  corpo::ControlePS4::mistura(0, -127, e, d);
+  confere("todo para tras: -100 e -100", e == -100 && d == -100);
+  corpo::ControlePS4::mistura(127, 0, e, d);
+  confere("todo para a direita gira no lugar: 100 e -100", e == 100 && d == -100);
+
+  // Frente e direita juntos passariam de 100 numa roda: prende no
+  // limite em vez de estourar a faixa do protocolo.
+  corpo::ControlePS4::mistura(127, 127, e, d);
+  confere("diagonal prende no limite: 100 e 0", e == 100 && d == 0);
+}
+
 }  // namespace
 
 void setup() {
@@ -266,6 +291,7 @@ void setup() {
   secaoMontagem();
   secaoServo();
   secaoRampa();
+  secaoManche();
   const uint32_t dt = millis() - t0;
 
   Serial.println("\n-----------------------------------------------------");

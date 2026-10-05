@@ -4,18 +4,21 @@ Duas placas, e a divisão entre elas é a decisão de arquitetura do projeto.
 
 ## Por que duas placas
 
-O ESP32-C3 SuperMini tem **um núcleo RISC-V a 160 MHz, ~400 KB de RAM e nenhuma
-PSRAM**. Ele faria áudio no limite — decodificação junto com HTTPS e Wi-Fi
-disputando o único núcleo — e reconhecimento de voz local nele é impossível: o
-ESP-SR só roda na S3.
+O corpo não tem PSRAM, não processa áudio e não usa Wi-Fi: só movimento. E
+reconhecimento de voz local só existe na S3 (ESP-SR) — por isso o cérebro é ela.
 
-| | XIAO ESP32-S3 Sense | ESP32-C3 SuperMini |
+| | XIAO ESP32-S3 Sense | ESP32 DevKit |
 | --- | --- | --- |
 | Papel | **cérebro** | **corpo** |
-| Núcleos | 2 × 240 MHz | 1 × 160 MHz |
+| Núcleos | 2 × 240 MHz | 2 × 240 MHz |
 | PSRAM | 8 MB octal | nenhuma |
-| Cuida de | câmera, microfone, alto-falante, Wi-Fi, decisão | motores, servos |
+| Cuida de | câmera, microfone, alto-falante, Wi-Fi, decisão | motores, servos, controle de PS4 |
 | Wi-Fi | sim | **não usa** |
+| Bluetooth | BLE | **clássico** — o que o controle de PS4 fala |
+
+**Por que a DevKit, e não mais o C3** (desde 05/10/2026): o DualShock 4 fala
+Bluetooth clássico, e o ESP32 clássico é o único da família que ainda o tem. O
+C3 e a S3 só fazem BLE.
 
 O corpo não usar Wi-Fi é a metade que protege: o pior caso de qualquer defeito
 no cérebro — travar numa rede ruim, ficar sem memória decodificando um quadro —
@@ -51,7 +54,28 @@ VSYNC 38     HREF  47     PCLK  13
 Estão escritos em `include/config_cerebro.h` em vez de virem de um cabeçalho de
 terceiro, para que uma atualização de biblioteca não mude a pinagem em silêncio.
 
-## ESP32-C3 SuperMini — o corpo
+## ESP32 DevKit — o corpo
+
+| Função | Pino |
+| --- | --- |
+| Motor esquerdo RPWM / LPWM | **GPIO32** / **GPIO33** |
+| Motor direito RPWM / LPWM | **GPIO25** / **GPIO26** |
+| EN (R_EN + L_EN das duas pontes) | **GPIO27**, com 10 k para GND |
+| Servo 1 / servo 2 | **GPIO19** / **GPIO18** |
+| UART1 RX ← cérebro | **GPIO16** (marcado RX2) |
+| UART1 TX → cérebro | **GPIO17** (marcado TX2) |
+| Controle de PS4 | Bluetooth clássico, nenhum pino |
+
+Escolhidos para caber em poucos pedaços de header: as pontes em **cinco pinos
+seguidos** de um lado (32, 33, 25, 26, 27), servos e enlace lado a lado do
+outro. **Nenhum é de *strapping*** (0, 2, 5, 12, 15), e o console fica no UART0,
+que é o USB da placa — log e enlace nunca dividem fio.
+
+Sobram 10 dos 16 canais de PWM.
+
+## ESP32-C3 SuperMini — o corpo até 05/10/2026, reserva
+
+Mesmo firmware, ambiente `corpo_c3`, sem o controle de PS4.
 
 | Função | Pino |
 | --- | --- |
@@ -77,7 +101,7 @@ texto de boot no lugar de `OK`, e o sintoma parece ruído elétrico — cabo,
 malha, aterramento — quando é uma flag de compilação. Vale o mesmo para o
 D6/D7 do cérebro, que são o UART0 dele.
 
-## Os seis canais de PWM do C3, todos ocupados
+## Os seis canais de PWM do C3, todos ocupados (só no C3)
 
 | Uso | Canais | Frequência | Resolução |
 | --- | --- | --- | --- |

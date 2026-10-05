@@ -1,5 +1,5 @@
 // =====================================================================
-//  main_corpo.cpp - ESP32-C3 SuperMini: o corpo do Feijao com Farinha
+//  main_corpo.cpp - o corpo do Feijao com Farinha (ESP32 DevKit)
 //
 //  Ele nao pensa. Recebe comando pela UART, obedece dentro do que o
 //  hardware aguenta, responde OK / ERR / PONG, e PARA SOZINHO se o
@@ -11,23 +11,53 @@
 //  andando sem ninguem no comando. Aqui, o pior caso de qualquer
 //  defeito la e o robo parar.
 //
-//  Console pelo USB CDC. Cabo USB fora nao atrapalha: o core descarta
-//  o que ninguem esta lendo, entao o log fica ligado com o robo
-//  andando pela sala.
+//  DUAS VOZES, E UMA REGRA ENTRE ELAS. O corpo obedece ao cerebro pela
+//  UART e ao controle de PS4 pelo Bluetooth. Enquanto alguem mexe no
+//  controle - e ate PS4_PRIORIDADE_MS depois do ultimo toque -, o `M`
+//  do cerebro e respondido com OK e NAO move nada: a mao na manopla
+//  ganha da decisao automatica. `STOP` vale sempre, venha de quem vier:
+//  parar nunca espera a vez. E o controle passa pelo mesmo failsafe -
+//  radio caindo sem aviso para o robo em 1 s, como cerebro calado.
+//
+//  Console pelo USB da placa. Cabo USB fora nao atrapalha: o log fica
+//  ligado com o robo andando pela sala.
 // =====================================================================
 #include <Arduino.h>
 
 #include "config_corpo.h"
+#include "controle_ps4.h"
 #include "linha.h"
 #include "motores.h"
 #include "protocolo.h"
 #include "servos.h"
 
+#if FEIJAO_PS4_LIGADO
+// O core 3.x LIBERA a memoria do Bluetooth no boot, antes do setup(), a
+// menos que alguem diga que vai usa-lo - e a biblioteca do PS4 nao diz.
+// Sem isto o controle falha com `initialize controller failed:
+// ESP_ERR_INVALID_STATE`, que nao menciona memoria nenhuma. Visto na
+// bancada em 05/10/2026, no primeiro boot com o controle.
+extern "C" bool btInUse() {
+  return true;
+}
+#endif
+
 namespace {
 
 corpo::Motores motores;
 corpo::Servos servos;
+corpo::ControlePS4 controle;
 enlace::Linha entrada;
+
+bool tem_controle         = false;
+bool controle_estava      = false;  // conectado na volta anterior do loop
+bool controle_dirigindo   = false;  // o ultimo movimento foi dele
+uint32_t controle_toque_ms = 0;     // ultimo instante com manche fora do centro
+
+// O controle tem a prioridade enquanto esta sendo usado.
+bool controleManda() {
+  return controle_estava && (millis() - controle_toque_ms) < PS4_PRIORIDADE_MS;
+}
 
 uint32_t ultimo_movimento_ms = 0;  // alimenta o failsafe
 uint32_t ultimo_tick_ms      = 0;
@@ -47,7 +77,16 @@ void responde(const char* texto) {
 void executa(const protocolo::Comando& c) {
   switch (c.tipo) {
     case protocolo::Tipo::MOTOR: {
-      const bool dentro = motores.velocidade(c.a, c.b);
+      if (controleManda()) {
+        // Aceito e ignorado: quem dirige agora e a mao no controle.
+        // OK, e nao ERR, porque o cerebro nao errou nada - so perdeu a
+        // vez, e um ERR viraria log de defeito do lado de la.
+        responde(protocolo::RESP_OK);
+        comandos_ok++;
+        break;
+      }
+      controle_dirigindo = false;
+      const bool dentro  = motores.velocidade(c.a, c.b);
       responde(protocolo::RESP_OK);
       comandos_ok++;
       if (!dentro) Serial.printf("[corpo] M fora de faixa, preso no limite\n");
@@ -62,6 +101,7 @@ void executa(const protocolo::Comando& c) {
 
     case protocolo::Tipo::PARAR:
       motores.para();
+      controle_dirigindo = false;
       responde(protocolo::RESP_OK);
       comandos_ok++;
       Serial.println("[corpo] STOP");
@@ -189,6 +229,17 @@ void setup() {
                 RAMPA_SUBIDA_MS == 0 ? "desligada (comando vale na hora)" : "ligada");
   Serial.println("pronto. Comandos: M <esq> <dir> | S <n> <ang> | STOP | EN <0|1> | PING");
   Serial.println("so no USB: `>tecla` fala com o console do cerebro | PONTE abre o enlace cru");
+
+  // O Bluetooth por ultimo: o corpo ja obedece ao cerebro antes de o
+  // controle existir, e um Bluetooth que nao sobe nao derruba nada.
+  tem_controle = controle.begin();
+  if (tem_controle) {
+    Serial.printf("[ps4] esperando o controle. Endereco desta placa: %s\n",
+                  controle.endereco().c_str());
+    Serial.println("[ps4] parear: scripts/pareia_ps4.py, com o controle no USB do PC");
+  } else if (TEM_PS4) {
+    Serial.println("[ps4] FALHOU ao subir o Bluetooth - seguindo so com o cerebro");
+  }
 }
 
 void loop() {
@@ -235,6 +286,43 @@ void loop() {
   }
 
   const uint32_t agora = millis();
+
+  // ---- Controle de PS4 --------------------------------------------
+  if (tem_controle) {
+    const bool conectado = controle.conectado();
+    if (conectado != controle_estava) {
+      controle_estava = conectado;
+      Serial.printf("[ps4] controle %s\n", conectado ? "conectado" : "DESCONECTADO");
+      if (conectado) {
+        controle.acende(0, 60, 0);  // verde: o robo esta ouvindo
+      } else if (controle_dirigindo) {
+        motores.para();  // a mao sumiu no meio do movimento
+        controle_dirigindo = false;
+      }
+    }
+
+    if (conectado && controle.falando()) {
+      int esq = 0, dir = 0;
+      bool freio       = false;
+      const bool mexeu = controle.le(esq, dir, freio);
+      if (freio || mexeu) {
+        if (freio) {
+          motores.para();
+        } else {
+          motores.velocidade(esq, dir);
+        }
+        controle_dirigindo  = true;
+        controle_toque_ms   = agora;
+        ultimo_movimento_ms = agora;  // o controle tambem alimenta o failsafe
+        failsafe_disparado  = false;
+      } else if (controle_dirigindo) {
+        // Manche de volta ao centro: o robo para, e o cerebro so
+        // retoma depois de PS4_PRIORIDADE_MS.
+        motores.velocidade(0, 0);
+        controle_dirigindo = false;
+      }
+    }
+  }
 
   // ---- Failsafe ---------------------------------------------------
   //

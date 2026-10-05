@@ -74,10 +74,13 @@ recomeçando — e quem estiver olhando vai procurar o defeito no código.
 sem resistor.
 
 ```
-XIAO S3  D6 (GPIO43) TX  ───────►  RX (GPIO20)  ESP32-C3
-XIAO S3  D7 (GPIO44) RX  ◄───────  TX (GPIO21)  ESP32-C3
+XIAO S3  D6 (GPIO43) TX  ───────►  GPIO16 (RX2)  ESP32 DevKit
+XIAO S3  D7 (GPIO44) RX  ◄───────  GPIO17 (TX2)  ESP32 DevKit
                     GND  ───────   GND
 ```
+
+Com o ESP32-C3 de reserva no lugar da DevKit, os pinos do corpo são GPIO20 (RX)
+e GPIO21 (TX).
 
 O GND dessa ligação é o mesmo GND comum de tudo. Duas placas trocando serial
 sem terra comum funcionam por alguns minutos e depois não funcionam mais.

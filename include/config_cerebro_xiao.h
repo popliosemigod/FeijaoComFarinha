@@ -103,6 +103,15 @@
 #define WIFI_SENHA ""
 #endif
 
+// A rede propria do robo, quando nao ha rede de casa. Sem AP_SENHA a
+// senha sai do endereco da placa - ver main_cerebro.cpp.
+#ifndef AP_NOME
+#define AP_NOME "feijao-com-farinha"
+#endif
+#ifndef AP_SENHA
+#define AP_SENHA ""
+#endif
+
 // Servico de voz: ainda NAO decidido (ver docs/05-a-voz.md). Enquanto
 // nao for, `voz.h` expoe a interface e nenhum endereco real.
 #ifndef VOZ_SERVIDOR

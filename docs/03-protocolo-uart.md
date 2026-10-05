@@ -90,6 +90,26 @@ intenção é ficar parado" não pode virar log de failsafe.
 
 Nenhum dos dois lados precisa que o outro esteja correto para se comportar bem.
 
+## Quem tem a vez: cérebro, controle e celular
+
+Desde 05/10/2026 o robô se dirige por três caminhos, e as regras entre eles são
+poucas e de propósito rígidas:
+
+| Regra | Onde mora |
+| --- | --- |
+| Enquanto alguém mexe no **controle de PS4** — e até 500 ms depois do último toque —, o `M` do cérebro é respondido `OK` e **não move nada** | `main_corpo.cpp` |
+| **`STOP` vale sempre**, venha de quem vier: parar nunca espera a vez | `main_corpo.cpp` |
+| O controle **alimenta o mesmo failsafe**: rádio caindo sem aviso para o robô em 1 s | `main_corpo.cpp` |
+| Controle desconectado no meio do movimento: o robô **para na hora** | `main_corpo.cpp` |
+| O **celular** só move enquanto o dedo está na seta; sem repetição por 400 ms, o cérebro manda parar | `web_cerebro.h` |
+
+A última existe porque o failsafe do corpo não enxerga o telefone: ele vê o
+cérebro vivo mandando o último `M`, e esperaria para sempre. Quem sabe que o
+telefone sumiu é o cérebro, então é ele quem para.
+
+O `OK` (e não `ERR`) para o `M` ignorado também é de propósito: o cérebro não
+errou nada, só perdeu a vez — e um `ERR` viraria log de defeito do lado de lá.
+
 ## O que passa pelo enlace e não é movimento
 
 A ESP32-CAM não tem USB, e o adaptador dela ocupa o header inteiro: com ele

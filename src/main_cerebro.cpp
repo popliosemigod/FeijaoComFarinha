@@ -45,6 +45,10 @@ cerebro::VozPorSerial voz;
 cerebro::ConsoleRede console_rede;
 cerebro::WebCerebro web_cerebro;
 
+// Rede: a de casa (WIFI_SSID) ou, sem ela, a propria do robo.
+String rede_ip;
+String rede_senha_propria;  // vazia quando o robo esta na rede de casa
+
 bool tem_audio  = false;
 bool tem_mic    = false;
 bool tem_camera = false;
@@ -142,7 +146,7 @@ void ajuda(Print& saida) {
   saida.println("  p          despeja a foto em base64");
   saida.println("  o / q      escuta: manda cada frase ouvida para o PC transcrever / para");
   saida.println(
-      "  ?          estado de tudo (mostra o endereco da foto no celular, se houver Wi-Fi)");
+      "  ?          estado de tudo (mostra a pagina, a rede e a senha dela)");
 }
 
 void estado(Print& saida) {
@@ -168,9 +172,14 @@ void estado(Print& saida) {
                (unsigned)(ESP.getPsramSize() / 1024));
   saida.printf("heap:        %u KB livres\n", (unsigned)(ESP.getFreeHeap() / 1024));
   saida.printf("console rede:%s\n", console_rede.descricao().c_str());
-  saida.printf("foto no celular:%s\n", web_cerebro.ligado()
-                                           ? (" http://" + WiFi.localIP().toString() + "/").c_str()
-                                           : " desligado (sem Wi-Fi)");
+  if (web_cerebro.ligado()) {
+    saida.printf("pagina:      http://%s/\n", rede_ip.c_str());
+    if (rede_senha_propria.length() > 0) {
+      saida.printf("rede:        \"%s\", senha %s\n", AP_NOME, rede_senha_propria.c_str());
+    }
+  } else {
+    saida.println("pagina:      desligada (sem Wi-Fi)");
+  }
 }
 
 // ---- O comando, vindo de onde vier ---------------------------------
@@ -289,33 +298,55 @@ void setup() {
 
   voz.begin();
 
-  // ---- Wi-Fi e o console de rede, so se ha credencial --------------
+  // ---- Wi-Fi: a rede de casa, ou a propria do robo -----------------
   //
-  // Sem WIFI_SSID (secrets.h ausente ou vazio), o robo sobe do mesmo
-  // jeito - so sem o console remoto. E a mesma regra do resto do
-  // firmware: falta de segredo nunca impede o boot, so reduz o que a
-  // placa oferece.
+  // Com WIFI_SSID em secrets.h, o robo entra na rede de casa. Sem ele -
+  // ou se ela nao responder em 10 s -, o robo CRIA a propria rede, e o
+  // celular entra nela. A pagina de dirigir nunca depende de alguem
+  // ter configurado nada: e a mesma regra do resto do firmware, falta
+  // de segredo nunca tira funcao do robo.
+  //
+  // A rede propria tem senha. Sem AP_SENHA em secrets.h ela sai do
+  // endereco da placa ("feijao" + quatro digitos): unica por robo e
+  // fora do repositorio, que e publico - uma senha padrao escrita aqui
+  // seria a senha de todo robo igual a este.
+  bool na_rede = false;
   if (WIFI_SSID[0] != '\0') {
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_SENHA);
     Serial.printf("[cerebro] conectando a \"%s\"", WIFI_SSID);
-    const uint32_t espera = millis() + 10000;  // 10 s, e segue sem rede se nao der
+    const uint32_t espera = millis() + 10000;
     while (WiFi.status() != WL_CONNECTED && millis() < espera) {
       delay(300);
       Serial.print('.');
     }
     Serial.println();
-    if (WiFi.status() == WL_CONNECTED) {
-      console_rede.begin();
-      web_cerebro.begin(&camera);
-      Serial.printf("[cerebro] Wi-Fi ok: %s - console em telnet :%u, foto em http://%s/\n",
-                    WiFi.localIP().toString().c_str(), (unsigned)cerebro::ConsoleRedePorta,
-                    WiFi.localIP().toString().c_str());
+    na_rede = WiFi.status() == WL_CONNECTED;
+    if (na_rede) rede_ip = WiFi.localIP().toString();
+  }
+  if (!na_rede) {
+    if (AP_SENHA[0] != '\0') {
+      rede_senha_propria = AP_SENHA;
     } else {
-      Serial.println("[cerebro] Wi-Fi nao respondeu em 10 s - seguindo so com a serial");
+      char senha[16];
+      snprintf(senha, sizeof(senha), "feijao%04x", (unsigned)(ESP.getEfuseMac() >> 32) & 0xffff);
+      rede_senha_propria = senha;
     }
+    WiFi.mode(WIFI_AP);
+    na_rede = WiFi.softAP(AP_NOME, rede_senha_propria.c_str());
+    if (na_rede) rede_ip = WiFi.softAPIP().toString();
+  }
+  if (na_rede) {
+    console_rede.begin();
+    web_cerebro.begin(&camera, &corpo);
+    if (rede_senha_propria.length() > 0) {
+      Serial.printf("[cerebro] rede propria \"%s\", senha %s\n", AP_NOME,
+                    rede_senha_propria.c_str());
+    }
+    Serial.printf("[cerebro] pagina em http://%s/ - console em telnet %s %u\n", rede_ip.c_str(),
+                  rede_ip.c_str(), (unsigned)cerebro::ConsoleRedePorta);
   } else {
-    Serial.println("[cerebro] sem WIFI_SSID em secrets.h - console de rede desligado");
+    Serial.println("[cerebro] Wi-Fi nao subiu - seguindo so com a serial");
   }
 
   xTaskCreatePinnedToCore(tarefaSentidos, "sentidos", 6144, nullptr, 2, nullptr, 1);

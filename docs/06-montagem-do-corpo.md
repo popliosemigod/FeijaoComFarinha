@@ -3,18 +3,23 @@
 **As duas placas já estão gravadas.** Nada de software precisa ser feito depois
 da montagem: ligou, funciona. Este documento é só fio, parafuso e conferência.
 
-> **O cérebro agora é a XIAO ESP32-S3 Sense** (desde 01/10/2026). Este roteiro
-> foi escrito com a ESP32-CAM, e com a XIAO ele encurta:
+> **As placas mudaram desde que este roteiro foi escrito**: o cérebro é a XIAO
+> ESP32-S3 Sense (01/10/2026) e o corpo é uma ESP32 DevKit (05/10/2026). Os
+> pinos abaixo citam a ESP32-CAM e o C3; vale a tabela, e a pinagem atual
+> inteira está no [README](../README.md#pinagem).
 >
-> | Etapa | Com a XIAO |
+> | Etapa | Agora |
 > | --- | --- |
-> | 2.2 — resistor no GPIO12 | **não existe**: é um pino da CAM |
-> | 3 — cabo entre as placas | **D6 → GPIO20, D7 → GPIO21**, e o GND |
-> | 4 — o microfone | **não existe**: ele já está na placa |
-> | console | USB-C da própria XIAO, sem adaptador |
+> | 2.1 — resistor no EN | no **GPIO27** da DevKit |
+> | 2.2 — resistor no GPIO12 | **não existe**: era um pino da CAM |
+> | 3 — cabo entre as placas | XIAO **D6 → GPIO16**, **D7 → GPIO17**, e o GND |
+> | 4 — o microfone | **não existe**: ele já está na XIAO |
+> | 5 — servos | **GPIO19** e **GPIO18** |
+> | 6 — pontes | **GPIO32/33** (esquerda) e **GPIO25/26** (direita) |
+> | console | USB-C da XIAO e USB da DevKit, sem adaptador |
 >
-> O resto — GND comum, resistor no EN das pontes, servos, motores por último —
-> vale igual.
+> O resto — GND comum, servos com fonte própria, motores por último — vale
+> igual.
 
 Siga na ordem. Cada etapa termina num **teste que você faz antes de seguir** —
 é o que impede um erro de fiação virar três horas de procura depois.

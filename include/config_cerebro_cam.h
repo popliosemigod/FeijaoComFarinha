@@ -152,6 +152,15 @@
 #ifndef WIFI_SENHA
 #define WIFI_SENHA ""
 #endif
+
+// A rede propria do robo, quando nao ha rede de casa. Sem AP_SENHA a
+// senha sai do endereco da placa - ver main_cerebro.cpp.
+#ifndef AP_NOME
+#define AP_NOME "feijao-com-farinha"
+#endif
+#ifndef AP_SENHA
+#define AP_SENHA ""
+#endif
 #ifndef VOZ_SERVIDOR
 #define VOZ_SERVIDOR ""
 #endif
