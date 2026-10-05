@@ -256,8 +256,8 @@ void secaoManche() {
   // O centro e o raio morto: um controle de verdade nunca devolve zero
   // exato, e sem raio morto o robo anda sozinho.
   confere("centro nao mexe", !corpo::ControlePS4::mistura(0, 0, e, d) && e == 0 && d == 0);
-  confere("folga do manche nao mexe", !corpo::ControlePS4::mistura(PS4_RAIO_MORTO - 1,
-                                                                   -(PS4_RAIO_MORTO - 1), e, d));
+  confere("folga do manche nao mexe",
+          !corpo::ControlePS4::mistura(PS4_RAIO_MORTO - 1, -(PS4_RAIO_MORTO - 1), e, d));
 
   corpo::ControlePS4::mistura(0, 127, e, d);
   confere("manche todo para a frente: 100 e 100", e == 100 && d == 100);

@@ -78,8 +78,8 @@
 // (`ARDUINO_USB_CDC_ON_BOOT=1` no platformio.ini). Sem CDC o log e o
 // enlace dividem o fio, e o cerebro recebe texto de boot no lugar de
 // resposta - defeito que parece ruido eletrico e nao e.
-#define PIN_UART_RX 20
-#define PIN_UART_TX 21
+#define PIN_UART_RX     20
+#define PIN_UART_TX     21
 
 #endif
 

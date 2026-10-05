@@ -49,10 +49,10 @@ corpo::Servos servos;
 corpo::ControlePS4 controle;
 enlace::Linha entrada;
 
-bool tem_controle         = false;
-bool controle_estava      = false;  // conectado na volta anterior do loop
-bool controle_dirigindo   = false;  // o ultimo movimento foi dele
-uint32_t controle_toque_ms = 0;     // ultimo instante com manche fora do centro
+bool tem_controle          = false;
+bool controle_estava       = false;  // conectado na volta anterior do loop
+bool controle_dirigindo    = false;  // o ultimo movimento foi dele
+uint32_t controle_toque_ms = 0;      // ultimo instante com manche fora do centro
 
 // O controle tem a prioridade enquanto esta sendo usado.
 bool controleManda() {

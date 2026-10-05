@@ -145,8 +145,7 @@ void ajuda(Print& saida) {
   saida.println("  f          foto: mede um quadro da camera");
   saida.println("  p          despeja a foto em base64");
   saida.println("  o / q      escuta: manda cada frase ouvida para o PC transcrever / para");
-  saida.println(
-      "  ?          estado de tudo (mostra a pagina, a rede e a senha dela)");
+  saida.println("  ?          estado de tudo (mostra a pagina, a rede e a senha dela)");
 }
 
 void estado(Print& saida) {
