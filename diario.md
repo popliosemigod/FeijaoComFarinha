@@ -762,3 +762,9 @@ linha, só no Windows.
 - **O controle conectado**: não havia controle no USB para parear.
 - **Dirigir pelo celular**: entrar na rede do robô derrubaria a internet do PC,
   então a página foi conferida num navegador local, não num telefone.
+
+**Fechamento, no CI.** No Linux do GitHub os sete ambientes compilam, com a
+biblioteca do PS4 e o `esptool_windows.py` sem efeito, como deve. O clang-format
+que o Windows não deixou rodar aqui reclamou de espaçamento em quatro arquivos;
+o diff veio do próprio job e entrou num commit à parte, sem mudar comportamento
+— as placas não foram regravadas por isso. Com ele, os dois jobs passaram.
