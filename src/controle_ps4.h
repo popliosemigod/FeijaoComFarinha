@@ -11,11 +11,13 @@
 //    manche esquerdo   frente/tras anda, esquerda/direita vira
 //    O (bolinha)       freia, enquanto apertado
 //    X (cruz)          tira uma foto (quem tira e o cerebro)
-//    L2 / R2           servo 1 / servo 2, proporcional ao aperto
+//    manche direito    move os servos 1 (lados) e 2 (cima/baixo); solto,
+//                      eles ficam onde estao
+//    R3                servos de volta ao repouso
 //
-//  As contas que transformam manche e gatilho em rodas e servos
-//  (`mistura`, `anguloDoGatilho`) sao puras e ficam fora do bloco do
-//  Bluetooth: o autoteste as exercita numa placa sem controle nenhum.
+//  As contas que transformam os manches em rodas e servos (`mistura`,
+//  `passoDoServo`) sao puras e ficam fora do bloco do Bluetooth: o
+//  autoteste as exercita numa placa sem controle nenhum.
 // =====================================================================
 #pragma once
 
@@ -63,21 +65,23 @@ public:
     return x != 0 || y != 0;
   }
 
-  // Gatilho (0 solto, 255 no fim) para o angulo do servo: repouso solto,
-  // repouso + PS4_SERVO_CURSO no fim, preso na faixa do servo.
-  static int anguloDoGatilho(uint8_t v) {
-    const int a = SERVO_REPOUSO + ((int)v * PS4_SERVO_CURSO) / 255;
-    return a < 0 ? 0 : (a > 180 ? 180 : a);
+  // Quantos graus o servo anda em `dt_ms` com o manche direito em `v`
+  // (-127 a 127). O manche move o servo em vez de apontar um angulo: no
+  // fim, PS4_SERVO_GRAUS_POR_S; no raio morto, nada - e solto, o servo
+  // fica onde parou.
+  static float passoDoServo(int v, uint32_t dt_ms) {
+    if (abs(v) < PS4_RAIO_MORTO) return 0.0f;
+    return (float)v / 127.0f * PS4_SERVO_GRAUS_POR_S * (float)dt_ms / 1000.0f;
   }
 
   // O que a mao esta fazendo agora.
   struct Mao {
     int esq = 0, dir = 0;  // rodas, de -100 a 100
-    bool mexeu = false;    // manche fora do centro
+    bool mexeu = false;    // manche esquerdo fora do centro
     bool freio = false;    // O apertado
     bool foto  = false;    // X apertado
-    uint8_t l2 = 0;        // gatilhos, de 0 a 255
-    uint8_t r2 = 0;
+    int rx = 0, ry = 0;    // manche direito, de -127 a 127, y positivo para cima
+    bool centra = false;   // R3 apertado
   };
 
 #if FEIJAO_PS4_LIGADO
@@ -150,11 +154,12 @@ public:
   // Le o estado atual.
   Mao le() {
     Mao m;
-    m.mexeu = mistura(PS4.LStickX(), -PS4.LStickY(), m.esq, m.dir);
-    m.freio = PS4.Circle();
-    m.foto  = PS4.Cross();
-    m.l2    = PS4.L2Value();
-    m.r2    = PS4.R2Value();
+    m.mexeu  = mistura(PS4.LStickX(), -PS4.LStickY(), m.esq, m.dir);
+    m.freio  = PS4.Circle();
+    m.foto   = PS4.Cross();
+    m.rx     = PS4.RStickX();
+    m.ry     = -PS4.RStickY();  // o controle conta para baixo
+    m.centra = PS4.R3();
     return m;
   }
 

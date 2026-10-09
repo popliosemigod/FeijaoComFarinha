@@ -153,14 +153,23 @@
 #define WIFI_SENHA ""
 #endif
 
-// A rede propria do robo, quando nao ha rede de casa. Sem AP_SENHA a
-// senha sai do endereco da placa - ver main_cerebro.cpp.
+// A rede propria do robo, quando nao ha rede de casa. ABERTA, sem
+// senha, por escolha do Henrique (08/10/2026): o celular entra direto.
+// O preco e que qualquer um ao alcance do Wi-Fi ve a camera e dirige o
+// robo - para fechar, defina AP_SENHA (8 caracteres ou mais) em
+// secrets.h. Ver main_cerebro.cpp.
 #ifndef AP_NOME
 #define AP_NOME "feijao-com-farinha"
 #endif
 #ifndef AP_SENHA
 #define AP_SENHA ""
 #endif
+
+// Ordem de voz anda por um tempo e para sozinha: a fala chega uns 3 s
+// depois de dita (o PC transcreve), entao um "pare" sempre chegaria
+// tarde - quem para o robo e o prazo. Ver voz_comandos.h.
+#define VOZ_ANDA_MS 1500  // frente e tras
+#define VOZ_VIRA_MS 700   // esquerda e direita
 #ifndef VOZ_SERVIDOR
 #define VOZ_SERVIDOR ""
 #endif

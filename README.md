@@ -98,14 +98,19 @@ Tire o cabo e aperte **PS**: a barra de luz fica verde quando o robô aceita.
 | manche esquerdo | anda e vira |
 | **○** | freia |
 | **✕** | foto — aparece na página; com a XIAO no PC, `scripts/fotos.py` salva |
-| **L2** / **R2** | servo 1 / servo 2, conforme o aperto; soltar volta a 90° |
+| manche direito | move os servos 1 (lados) e 2 (cima/baixo); solto, ficam onde estão |
+| **R3** | servos de volta ao centro |
 
-**Pelo celular.** Entre na rede Wi-Fi **feijao-com-farinha** — a senha aparece
-no console do cérebro no boot e no `?` — e abra **http://192.168.4.1**. Segurar
-uma seta anda, soltar para; tocar na imagem tira uma foto, e a fileira embaixo
-mostra as últimas (as do ✕ aparecem sozinhas). Se o telefone some, o robô para
-em 0,4 s. Com `include/secrets.h` preenchido, o robô entra na rede de
-casa no lugar de criar a própria.
+**Pelo celular.** Entre na rede Wi-Fi **feijao-com-farinha** — aberta, sem
+senha — e abra **http://192.168.4.1**. Segurar uma seta anda, soltar para; tocar
+na imagem tira uma foto, e a fileira embaixo mostra as últimas (as do ✕ aparecem
+sozinhas). Embaixo dela, o que o robô ouviu. Se o telefone some, o robô para em
+0,4 s. Com `include/secrets.h` preenchido, o robô entra na rede de casa no lugar
+de criar a própria; `AP_SENHA` lá fecha a rede dele.
+
+**Pela voz**, com a XIAO no USB do PC (`python scripts/ouve.py --porta COM13`):
+diga **frente**, **trás**, **esquerda**, **direita** ou **pare**, perto da placa.
+Cada ordem anda um pouco e para sozinha — a fala chega uns 3 s depois de dita.
 
 **Pelo console**, com a XIAO no USB (`pio device monitor -p COM13`), teclas sem
 Enter: `w` `a` `s` `d` `x` movem, `p` foto, `o` / `q` liga e desliga a escuta,
@@ -116,8 +121,8 @@ Enter: `w` `a` `s` `d` `x` movem, `p` foto, `o` / `q` liga e desliga a escuta,
 ```powershell
 pio run -e cerebro -t upload --upload-port COM13   # grava a XIAO
 pio run -e corpo   -t upload --upload-port COM4    # grava a DevKit
-python scripts/ouve.py --porta COM13               # fala para texto
-python scripts/fotos.py --porta COM13              # salva as fotos do ✕ no PC
+python scripts/ouve.py --porta COM13               # voz: ouve, transcreve, o robô obedece
+python scripts/fotos.py --porta COM13              # só as fotos do ✕ (o ouve.py já salva)
 ```
 
 | Ambiente | Placa | |
@@ -133,10 +138,11 @@ python scripts/fotos.py --porta COM13              # salva as fotos do ✕ no PC
 
 | | Medido |
 | --- | --- |
-| Autoteste da lógica, na DevKit | 65 de 65, em 224 ms |
+| Autoteste da lógica, na DevKit | 82 de 82, em 280 ms |
 | Failsafe | para em **1001 ms** sem comando |
 | Câmera da XIAO (OV3660) | brilho médio 118 de 255; guarda as últimas 8 fotos |
 | **Fala para texto** | 5 de 5 frases, 2,5 a 3,6 s cada, sem nuvem |
+| **Voz vira ordem** | o texto volta à XIAO, que decide e mostra na página |
 | **Controle de PS4** | conecta, e **as rodas giram** com boa resposta |
 | Foto pedida pelo PC | sai da XIAO e vira arquivo (`scripts/fotos.py`) |
 | Rede própria do robô | no ar e visível; página de 2,2 KB |
@@ -144,10 +150,10 @@ python scripts/fotos.py --porta COM13              # salva as fotos do ✕ no PC
 ## O que falta
 
 - **Ligar os três fios** entre a XIAO e a DevKit: sem eles, a foto do ✕ não
-  chega à câmera. Depois, dirigir pelo celular.
-- **O texto virar ordem:** o que o robô ouve aparece na tela do PC e para ali.
+  chega à câmera, e a ordem de voz não chega às rodas.
+- **Ouvir sem o PC:** hoje quem transcreve é o Whisper no computador.
 - A **antena** da XIAO: sem ela, a rede do robô alcança poucos metros.
-- Servos, alto-falante, e voz de gente com o motor ligado.
+- Servos de verdade, alto-falante, e voz de gente com o motor ligado.
 
 ## Documentação
 

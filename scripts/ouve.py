@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Ouve o robô pelo USB e escreve o que foi dito (fala para texto).
+"""Ouve o robô pelo USB, escreve o que foi dito e devolve para ele obedecer.
 
 A placa recorta as frases (`src/voz_serial.h`): decide onde cada uma começa e
 acaba e despeja o áudio em base64 no console, entre "---AUDIO-INICIO---" e
 "---AUDIO-FIM---". Este script é a outra metade: junta o áudio, transcreve com
-o Whisper **nesta máquina** e mostra o texto.
+o Whisper **nesta máquina**, mostra o texto e o devolve à placa numa linha
+`!texto`. Quem decide se é ordem ("frente", "trás", "esquerda", "direita",
+"pare") é o robô - `src/voz_comandos.h` -, e a página dele mostra o que ouviu.
+
+As fotos que passarem pela mesma porta (o X do controle) são salvas também,
+como faz `scripts/fotos.py`.
 
 É o caminho 1 de docs/05-a-voz.md — o mesmo motor (faster-whisper) que a ponte
 do Jaspy usa —, só que pelo cabo, porque o Wi-Fi do robô ainda não tem
@@ -44,6 +49,10 @@ INICIO = re.compile(r"---AUDIO-INICIO (\d+) (\d+)---")
 FIM = "---AUDIO-FIM---"
 BASE64 = re.compile(r"[A-Za-z0-9+/]+={0,2}")
 
+# Palavras que o Whisper deve esperar. Comando falado é curto, e uma palavra
+# solta sem contexto ("ré") é onde ele mais erra.
+DICAS = "frente, trás, esquerda, direita, pare"
+
 
 def carrega_modelo(tamanho):
     from faster_whisper import WhisperModel
@@ -69,7 +78,7 @@ def transcreve(modelo, pcm, taxa, idioma):
 
     t0 = time.time()
     segmentos, _ = modelo.transcribe(audio, language=idioma, beam_size=5,
-                                     condition_on_previous_text=False)
+                                     condition_on_previous_text=False, hotwords=DICAS)
     texto = " ".join(s.text.strip() for s in segmentos).strip()
     return texto, time.time() - t0
 
@@ -97,6 +106,8 @@ def main():
     import numpy as np
     import serial
 
+    from fotos import RecebeFotos
+
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--porta", default="COM13", help="porta USB do cérebro")
     ap.add_argument("--modelo", default="small", help="tiny, base, small, medium...")
@@ -121,6 +132,7 @@ def main():
     amostras = taxa = None
     linhas_b64 = []
     frases = 0
+    fotos = RecebeFotos()
     try:
         while fim is None or time.time() < fim:
             pendente += porta.read(65536)
@@ -134,27 +146,43 @@ def main():
                     linhas_b64 = []
                     continue
                 if amostras is None:
-                    if args.log and linha:
-                        print(f"    . {linha}")
+                    if fotos.linha(linha):
+                        continue
+                    if linha.startswith("[voz]") or (args.log and linha):
+                        print(f"    . {linha}", flush=True)
                     continue
                 if linha != FIM:
-                    # Log de outra task pode cair entre duas linhas de audio.
+                    # Log de outra task pode cair entre duas linhas de audio
+                    # - inclusive a resposta do robo a frase anterior.
                     if BASE64.fullmatch(linha):
                         linhas_b64.append(linha)
-                    elif args.log and linha:
-                        print(f"    . {linha}")
+                    elif linha.startswith("[voz]") or (args.log and linha):
+                        print(f"    . {linha}", flush=True)
                     continue
 
-                pcm = np.frombuffer(base64.b64decode("".join(linhas_b64)), dtype="<i2")
+                # Log que cai NO MEIO de uma linha de audio a estraga, e ela
+                # sai inteira: 57 bytes, numero impar. Visto na bancada em
+                # 08/10/2026 - derrubava o script em vez de perder a frase.
                 esperado, amostras = amostras, None
-                if len(pcm) != esperado:
-                    print(f"  (frase incompleta: {len(pcm)} de {esperado} amostras - descartada)")
+                try:
+                    bruto = base64.b64decode("".join(linhas_b64))
+                except ValueError:
+                    bruto = b""
+                if len(bruto) != esperado * 2:
+                    print(f"  (frase incompleta: {len(bruto) // 2} de {esperado} amostras - descartada)",
+                          flush=True)
                     continue
+                pcm = np.frombuffer(bruto, dtype="<i2")
                 texto, gasto = transcreve(modelo, pcm, taxa, args.idioma)
                 salva(pcm, taxa, texto, gasto)
                 frases += 1
                 print(f"[{datetime.datetime.now():%H:%M:%S}] {len(pcm) / taxa:4.1f} s de fala, "
                       f"{gasto:.1f} s para transcrever:  {texto or '(nada reconhecido)'}", flush=True)
+                if texto:
+                    # De volta para o robô: uma linha só, curta o bastante
+                    # para o buffer dele (127 bytes).
+                    linha_volta = " ".join(texto.split())[:100]
+                    porta.write(("!" + linha_volta + "\n").encode("utf-8"))
     except KeyboardInterrupt:
         pass
     finally:

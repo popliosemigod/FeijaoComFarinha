@@ -25,9 +25,9 @@
 #define WIFI_SSID  "minha-rede-24ghz"
 #define WIFI_SENHA "a-senha"
 
-// Opcional: a senha da rede propria do robo (8 caracteres ou mais),
-// usada quando a rede de cima nao responde. Sem ela, a senha sai do
-// endereco da placa e aparece no console no boot.
+// Opcional: uma senha para a rede propria do robo (8 caracteres ou
+// mais), usada quando a rede de cima nao responde. Sem ela a rede do
+// robo fica ABERTA.
 // #define AP_SENHA "uma-senha-sua"
 
 // ---- Servico de voz -------------------------------------------------

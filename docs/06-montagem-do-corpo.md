@@ -242,6 +242,7 @@ abaixo, `o` / `q` ligam e desligam a escuta de frases
 | `t` | rotina de teste completa |
 | `f` | mede um quadro da câmera |
 | `p` | tira a foto, guarda para a página e despeja em base64 pela serial (`scripts/fotos.py` salva) |
+| `!texto` + Enter | o que o PC ouviu (`scripts/ouve.py` manda sozinho): frente, trás, esquerda, direita, pare |
 | `h` | a ajuda de novo |
 
 **O robô não anda sozinho ao ligar.** Nada se move até você mandar. A placa

@@ -26,6 +26,7 @@
 #include "motores.h"
 #include "protocolo.h"
 #include "servos.h"
+#include "voz_comandos.h"
 
 namespace {
 
@@ -271,17 +272,53 @@ void secaoManche() {
   corpo::ControlePS4::mistura(127, 127, e, d);
   confere("diagonal prende no limite: 100 e 0", e == 100 && d == 0);
 
-  // Gatilho solto e o servo em repouso: conectar o controle nao pode
-  // mexer servo nenhum.
-  confere("gatilho solto: servo em repouso",
-          corpo::ControlePS4::anguloDoGatilho(0) == SERVO_REPOUSO);
-  const int fim = corpo::ControlePS4::anguloDoGatilho(255);
-  confere("gatilho no fim: repouso + curso",
-          fim == constrain(SERVO_REPOUSO + PS4_SERVO_CURSO, 0, 180));
-  const int meio = corpo::ControlePS4::anguloDoGatilho(128);
-  confere("gatilho no meio: entre os dois",
-          (meio - SERVO_REPOUSO) * (fim - SERVO_REPOUSO) > 0 &&
-              abs(meio - SERVO_REPOUSO) < abs(fim - SERVO_REPOUSO));
+  // Manche direito solto: servo parado. Conectar o controle, ou a folga
+  // dele, nao pode mexer servo nenhum.
+  confere("manche direito no centro: servo parado",
+          corpo::ControlePS4::passoDoServo(0, 1000) == 0.0f);
+  confere("folga do manche direito: servo parado",
+          corpo::ControlePS4::passoDoServo(PS4_RAIO_MORTO - 1, 1000) == 0.0f);
+  const float fim = corpo::ControlePS4::passoDoServo(127, 1000);
+  confere("manche direito no fim, 1 s: anda a velocidade cheia",
+          fabsf(fim - PS4_SERVO_GRAUS_POR_S) < 0.01f);
+  confere("para o outro lado: o mesmo, ao contrario",
+          fabsf(corpo::ControlePS4::passoDoServo(-127, 1000) + fim) < 0.01f);
+  const float meio = corpo::ControlePS4::passoDoServo(64, 1000);
+  confere("na metade: entre parado e cheio", meio > 0.0f && meio < fim);
+}
+
+void secaoVoz() {
+  Serial.println("\n[8] a voz vira ordem (o texto do Whisper, sem microfone)");
+  using cerebro::Ordem;
+  struct Caso {
+    const char* frase;
+    Ordem ordem;
+  };
+  // Frases como o Whisper as devolve: com maiuscula, ponto e acento.
+  static const Caso CASOS[] = {
+      {"Frente.", Ordem::FRENTE},
+      {"Siga para frente!", Ordem::FRENTE},  // "para" de preposicao
+      {"Para trás.", Ordem::TRAS},           // idem
+      {"Dá ré.", Ordem::TRAS},
+      {"Vire à esquerda.", Ordem::ESQUERDA},
+      {"DIREITA", Ordem::DIREITA},
+      {"Para.", Ordem::PARA},  // "para" sozinho para
+      {"Pare!", Ordem::PARA},
+      {"Pare de ir para frente.", Ordem::PARA},    // parar ganha da direcao
+      {"Frente e depois direita", Ordem::FRENTE},  // a primeira direcao vale
+      {"Bom dia, tudo bem?", Ordem::NADA},
+      {"Representa", Ordem::NADA},  // "re" so como palavra inteira
+      {"Siga para frente, frente", Ordem::FRENTE},
+      // O "Pare." da bancada, mal ouvido: frase longa nao move o robo...
+      {"para trás mais um resto só, repare", Ordem::NADA},
+      // ...mas parar vale em qualquer tamanho.
+      {"Pare agora mesmo, por favor, meu robô", Ordem::PARA},
+  };
+  for (const Caso& c : CASOS) {
+    char nome[64];
+    snprintf(nome, sizeof(nome), "\"%s\" -> %s", c.frase, cerebro::nomeDaOrdem(c.ordem));
+    confere(nome, cerebro::entende(c.frase) == c.ordem);
+  }
 }
 
 }  // namespace
@@ -304,6 +341,7 @@ void setup() {
   secaoServo();
   secaoRampa();
   secaoManche();
+  secaoVoz();
   const uint32_t dt = millis() - t0;
 
   Serial.println("\n-----------------------------------------------------");

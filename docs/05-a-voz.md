@@ -18,8 +18,27 @@
 > | *"Vire para a esquerda e tire uma foto."* | `Vire para a esquerda e tira uma foto.` |
 > | Tempo para transcrever (CPU, modelo `small`) | 2,5 a 3,6 s por frase; uma levou 8,9 s |
 >
-> **O texto fica no PC.** Transformar o que foi dito em ordem para o robô, e
-> falar de volta, continuam em aberto — é o resto deste documento.
+> **Desde 08/10/2026 o texto vira ordem.** O `ouve.py` devolve cada frase à
+> placa numa linha `!texto`, e quem decide o que ela quer dizer é o cérebro
+> ([`src/voz_comandos.h`](../src/voz_comandos.h)):
+>
+> | Dito | Ordem |
+> | --- | --- |
+> | "frente", "siga para frente" | anda para a frente por 1,5 s |
+> | "trás", "para trás", "ré" | anda para trás por 1,5 s |
+> | "esquerda", "direita" | vira no lugar por 0,7 s |
+> | "pare", "parar", "stop" — e "para" sozinho | para |
+>
+> **"Para" é a armadilha**: em "siga para frente" é preposição. "Pare" para
+> sempre; "para" só para quando nenhuma direção foi dita. **Comando é curto**:
+> frase de mais de 6 palavras só serve para parar — na bancada, um "Pare." fraco
+> virou "para trás mais um resto só, repare", que sem esse corte faria o robô
+> andar para trás. **Cada ordem tem
+> prazo e para sozinha**, porque a fala chega uns 3 s depois de dita — um
+> "pare" chegaria tarde. A página do robô mostra as últimas frases ouvidas e a
+> ordem tirada de cada uma.
+>
+> Falar de volta continua em aberto — é o resto deste documento.
 
 O prompt do projeto diz, com estas palavras: *"Decisão em aberto — PERGUNTE
 antes de implementar a parte de voz: qual serviço de reconhecimento de fala /

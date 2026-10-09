@@ -110,10 +110,13 @@
 // prioridade sobre o cerebro. Ver `main_corpo.cpp`.
 #define PS4_PRIORIDADE_MS 500
 
-// Gatilhos: L2 move o servo 1, R2 o servo 2. Solto, o servo fica em
-// SERVO_REPOUSO; apertado ate o fim, anda PS4_SERVO_CURSO graus a mais.
-// Negativo vira o sentido.
-#define PS4_SERVO_CURSO 90
+// Manche direito: os dois servos. Empurrar move o servo, e soltar o
+// deixa onde esta - da para mirar e depois, com o mesmo polegar livre,
+// apertar o X da foto. R3 (apertar o manche direito) volta os dois ao
+// repouso. Horizontal no servo 1, vertical no servo 2; -1 inverte.
+#define PS4_SERVO_GRAUS_POR_S 120  // com o manche no fim
+#define PS4_SERVO_SENTIDO_1   1
+#define PS4_SERVO_SENTIDO_2   1
 
 // X pede uma foto ao cerebro. Ela leva ~1,5 s (a camera descarta
 // quadros ate a exposicao assentar), entao pedido mais rapido que isto

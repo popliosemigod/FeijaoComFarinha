@@ -1,13 +1,13 @@
 # Resumo — onde o projeto está, e para onde vai
 
-*Atualizado em 05/10/2026. O registro completo, com cada medida, está no
+*Atualizado em 08/10/2026. O registro completo, com cada medida, está no
 [`diario.md`](../diario.md); aqui fica só o essencial.*
 
 ## Em uma frase
 
 Um robô de duas placas — a **XIAO ESP32-S3 Sense** pensa, a **ESP32 DevKit**
-anda — que se dirige pelo controle de PS4 ou pelo celular, fotografa e
-transcreve fala. O firmware roda nas duas placas, e **as rodas já giram pelo
+anda — que se dirige pelo controle de PS4, pelo celular ou pela voz, e
+fotografa. O firmware roda nas duas placas, e **as rodas já giram pelo
 controle**. **As duas placas ainda não foram ligadas entre si.**
 
 ## O caminho até aqui
@@ -29,6 +29,7 @@ controle**. **As duas placas ainda não foram ligadas entre si.**
 | 05/10 | **O controle de PS4 de verdade** | Piscava sem conectar: chegava ao corpo e desistia em 0,35 s. Ele confere uma **chave de enlace** a cada conexão, e o corpo não a conhecia. Agora o script grava a chave no controle e conta ao corpo qual controle aceitar: **conectou, e o manche chega às rodas** |
 | 05/10 | **O robô ligado, pelo controle** | Henrique acionou as duas placas: **as rodas giraram, com boa resposta e conexão estável**. Depois: ✕ tira foto (o corpo pede ao cérebro pelo enlace), ○ freia, L2/R2 movem os servos. A foto pedida pelo PC já sai da XIAO e vira arquivo; a do ✕ espera os fios do enlace |
 | 05/10 | **A câmera vira os olhos do Jaspy** | A XIAO guarda as últimas 8 fotos e as serve na rede (`/foto.jpg`, `/fotos`, `POST /foto`) — para o Jaspy ver pelo robô. A página ganhou uma fileira com elas, para olhar rápido |
+| 08/10 | **A voz vira ordem; rede aberta; servos no manche direito** | O PC devolve o texto à XIAO, que decide (frente, trás, esquerda, direita, pare) e anda por um prazo curto; a página mostra o que ouviu. "Para" de preposição não para o robô. A rede do robô ficou sem senha, a pedido. Os servos saíram dos gatilhos para o manche direito, que os move e os deixa onde soltar. No teste, o `ouve.py` caía com uma linha de áudio estragada — corrigido |
 
 ## Como está hoje
 
@@ -42,7 +43,7 @@ controle**. **As duas placas ainda não foram ligadas entre si.**
 
 **Provado**
 
-- Autoteste **65 de 65 na DevKit**, incluindo as contas do manche e dos gatilhos; failsafe
+- Autoteste **82 de 82 na DevKit**, incluindo os dois manches e a voz; failsafe
   em 1001 ms.
 - **XIAO:** câmera (OV3660) com brilho médio 118 de 255, microfone PDM, 8 MB de
   PSRAM, e **fala para texto** — 5 frases de voz sintética, todas transcritas.
@@ -59,11 +60,14 @@ controle**. **As duas placas ainda não foram ligadas entre si.**
 
 - **As duas placas conversando**: faltam os três fios — e com eles a foto do
   ✕ (hoje o corpo pede e o cérebro não ouve).
-- **Servos pelos gatilhos**: a conta passa no autoteste; o servo de verdade
-  ainda não foi visto.
+- **Servos pelo manche direito**: a conta passa no autoteste; o servo de
+  verdade ainda não foi visto.
+- **A voz movendo as rodas**: o cérebro tira a ordem certa do texto (testado
+  pelo USB), mas sem os fios do enlace ela não chega ao corpo. A voz sintética
+  pelo alto-falante do PC chegou fraca demais ao microfone para valer de teste.
 - **Dirigir pelo celular**, e a fileira de fotos: a página não foi aberta num
   telefone ainda (só no PC, contra respostas falsas).
-- **O texto virar ordem.** Hoje ele aparece na tela do PC e para ali.
+- **Ouvir sem o PC**: quem transcreve ainda é o Whisper no computador.
 - Fala de gente, e com o motor ligado; alto-falante.
 
 ## Aonde queremos chegar
@@ -75,14 +79,13 @@ sozinho**, ouve, fala, vê, e é o mesmo personagem do
 O que falta, na ordem em que destrava o resto:
 
 1. **Ligar os três fios** entre as placas (D6 → GPIO16, D7 → GPIO17, GND) — e
-   ver a foto do ✕ chegar.
+   ver a foto do ✕ chegar e a voz mover as rodas.
 2. **Dirigir pelo celular**, com a antena da XIAO no lugar.
 3. **O Jaspy enxergar pelo robô:** pedir `/foto.jpg` e descrever o que vê — a
    câmera é a visão dele.
-4. **O texto virar ordem:** o que foi transcrito voltar para o robô como
-   intenção (andar, parar, virar), com a parada valendo antes de tudo.
-5. **Falar de volta:** síntese de voz, o MAX98357A, e a palavra *"para"*
-   reconhecida sem rede ([05](05-a-voz.md)).
+4. **Ouvir sem o PC:** a palavra *"pare"* reconhecida na própria placa, para a
+   parada não depender da rede nem do computador ([05](05-a-voz.md)).
+5. **Falar de volta:** síntese de voz e o MAX98357A ([05](05-a-voz.md)).
 6. **Os ensaios de bancada que restam** ([04](04-roteiro-de-bancada.md)): duty
    mínimo de partida, rampa, limites dos servos, e o robô no chão.
 
@@ -92,13 +95,15 @@ O que falta, na ordem em que destrava o resto:
 pio run -e cerebro -t upload --upload-port COM13   # grava a XIAO
 pio run -e corpo   -t upload --upload-port COM4    # grava a DevKit
 python scripts/pareia_ps4.py --corpo COM4          # pareia (controle e DevKit no USB)
-python scripts/ouve.py --porta COM13               # fala para texto
+python scripts/ouve.py --porta COM13               # voz: ouve, transcreve, o robô obedece
 python scripts/fotos.py --porta COM13              # salva as fotos do ✕
 ```
 
-Celular: rede **feijao-com-farinha** (senha no console do cérebro, `?`), página
+Celular: rede **feijao-com-farinha** (aberta, sem senha), página
 em **http://192.168.4.1**. Console da XIAO: `w a s d x` movem, `p` foto, `o`/`q`
-escuta, `?` estado. Controle: manche anda, ○ freia, ✕ foto, L2/R2 servos.
+escuta, `?` estado. Controle: manche esquerdo anda, ○ freia, ✕ foto, manche
+direito move os servos, R3 os centra. Voz (com `ouve.py`): frente, trás, esquerda,
+direita, pare.
 Console da DevKit: `M 40 40`, `STOP`, `EN 0`/`EN 1`.
 
 No Windows, o `pio` roda pelo **PowerShell**, com `PLATFORMIO_CACHE_DIR` num

@@ -937,3 +937,99 @@ O relato do cérebro para o corpo leva o número (`[cerebro] foto 3: 320x240,
 - **A página num telefone**, com a XIAO de verdade: entrar na rede do robô tira
   a internet deste PC.
 - **O Jaspy pedindo foto**: o endereço existe; o lado do Jaspy não.
+
+## 2026-10-08 — A voz vira ordem, a rede abre, os servos vão para o manche direito
+
+Três pedidos do Henrique: página sem senha, o robô **obedecer à voz** em
+comandos simples, e os servos no manche direito, que estava sobrando, no lugar
+dos gatilhos.
+
+### A rede sem senha
+
+A rede própria do robô (`feijao-com-farinha`) agora sobe **aberta**: o celular
+entra direto. A senha que saía do endereço da placa foi embora. O preço, escrito
+no `config`: qualquer um ao alcance do Wi-Fi vê a câmera e dirige o robô.
+`AP_SENHA` no `secrets.h` fecha de novo.
+
+### A voz vira ordem
+
+O caminho que já transcrevia (placa recorta, PC transcreve com Whisper) ganhou a
+volta: o `ouve.py` devolve cada frase à XIAO numa linha `!texto`, e **quem
+decide é o cérebro** (`src/voz_comandos.h`) — o PC só ouve.
+
+| Dito | Ordem |
+| --- | --- |
+| "frente", "siga para frente" | frente, 1,5 s |
+| "trás", "para trás", "ré" | trás, 1,5 s |
+| "esquerda", "direita" | vira no lugar, 0,7 s |
+| "pare", "parar", "stop"; "para" sozinho | para |
+
+**"Para" é preposição e é parar.** "Siga para frente" contém "para"; se ele
+parasse o robô, o comando mais comum faria o contrário do pedido. A regra:
+"pare"/"parar"/"stop" param sempre ("pare de ir para frente" para); "para" só
+para quando nenhuma direção foi dita; com duas direções, vale a primeira.
+
+**Cada ordem tem prazo e para sozinha.** A fala chega uns 3 s depois de dita (o
+Whisper leva esse tempo), então um "pare" sempre chegaria tarde para segurar um
+movimento sem fim. Tecla de movimento no console cancela o prazo.
+
+A **página mostra** as últimas frases ouvidas e a ordem tirada de cada uma
+(`GET /voz`), atualizando a cada segundo. O Whisper ganhou as palavras de
+comando como dica (`hotwords`) — comparado nas mesmas gravações, com e sem dica
+deu o mesmo; ficou, porque palavra solta é onde ele mais erra.
+
+### Os servos no manche direito
+
+Os gatilhos apontavam um ângulo e o servo voltava ao soltar. O manche direito
+**move** o servo (120°/s no fim) e o deixa onde soltar — dá para mirar e, com o
+mesmo polegar livre, apertar o ✕ da foto. **R3** volta os dois ao centro. Se o
+cérebro mover um servo com `S`, o manche continua de onde o servo está.
+
+### Medido
+
+| | Medido |
+| --- | --- |
+| Autoteste na DevKit | **79 de 79**, em 269 ms — 5 do manche direito, 12 frases de voz; com a regra da frase curta, 82 |
+| Texto mandado pelo USB da XIAO | 5 de 5 ordens certas, inclusive "Siga para frente!" → frente e "Bom dia" → nada |
+| Rede do robô | sobe **aberta, sem senha** |
+| Voz sintética pelo alto-falante do PC → microfone → Whisper | de 7 frases, **4 transcritas: 2 certas** ("siga para frente", "frente") **e 2 erradas**; 3 não passaram do limiar |
+| Pico dessa voz no microfone | 0,003 a 0,005 — o próprio limiar mínimo; ruído de fundo 0,0002 |
+| Teste do Henrique | controle conectou; ✕ pediu foto duas vezes; a XIAO ouviu e transcreveu "acalme-se" |
+
+**As duas erradas.** "Vire à esquerda" virou "siga para frente, frente" — erro
+de reconhecimento, sem regra que o pegue. E **"Pare." virou "para trás mais um
+resto só, repare"**, que o robô teria lido como **trás**: um pare mal ouvido
+virando movimento. Dela saiu uma regra em `voz_comandos.h`: **comando é curto**
+— frase de mais de 6 palavras não move o robô; parar continua valendo em
+qualquer tamanho, porque parar por engano é seguro. O autoteste ganhou as duas
+frases da bancada (82 de 82).
+
+**O limiar não baixou.** A voz sintética saía longe e fraca; voz de gente a meio
+metro chega dez a vinte vezes mais forte. O limiar de 0,003 foi ajustado na
+bancada em 01/10, e baixá-lo por causa de um alto-falante faria o ruído do motor
+virar "fala".
+
+### Um defeito achado no teste
+
+O `ouve.py` **caiu** logo depois do "acalme-se": `buffer size must be a multiple
+of element size`. A resposta do cérebro (`[voz] ouvi ...`) foi escrita no USB no
+meio do áudio da frase seguinte; a linha de áudio estragada saiu inteira — 57
+bytes, número ímpar —, e o script quebrou antes de conferir o tamanho. Agora a
+frase estragada é descartada como incompleta e o script segue; o recebedor de
+fotos ganhou a mesma proteção (testado com uma foto de verdade e uma linha
+estragada no meio).
+
+### A máquina, de novo
+
+O Controle de Aplicativo do Windows passou a bloquear o compilador do RISC-V
+(`cc1plus.exe`), e o `corpo_c3` — a placa reserva — não compila mais aqui. O CI
+compila no Linux.
+
+### O que não está provado
+
+- **A foto do ✕ e a voz movendo as rodas**: os três fios do enlace continuam
+  desligados — o cérebro diz `corpo MUDO`, e os dois ✕ do teste não chegaram.
+- **Ordem de voz dita por gente**: o caminho funcionou com voz sintética e com
+  texto; a fala do Henrique foi ouvida, mas não era comando.
+- **Os servos de verdade** no manche direito.
+- **A página no telefone**: conferida no PC, contra respostas falsas.

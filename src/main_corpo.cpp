@@ -81,27 +81,45 @@ void relataControle(int esq, int dir, bool freio) {
   }
 }
 
-// O que os gatilhos pediram aos servos por ultimo.
-int servo_pedido[2] = {SERVO_REPOUSO, SERVO_REPOUSO};
+// Manche direito nos servos 1 (lados) e 2 (cima/baixo). O manche MOVE o
+// servo, a PS4_SERVO_GRAUS_POR_S no fim; solto, o servo fica onde
+// parou. R3 devolve os dois ao repouso. O log segue a regra do manche
+// esquerdo: no maximo um a cada 150 ms em movimento.
+void mancheNosServos(int rx, int ry, bool centra) {
+  static float alvo[2]        = {SERVO_REPOUSO, SERVO_REPOUSO};
+  static int dito[2]          = {SERVO_REPOUSO, SERVO_REPOUSO};
+  static uint32_t antes_ms    = millis();
+  static uint32_t dito_ms     = 0;
+  static bool centrava        = false;
+  static const int sentido[2] = {PS4_SERVO_SENTIDO_1, PS4_SERVO_SENTIDO_2};
 
-// L2 e R2 nos servos 1 e 2. So age quando o gatilho MUDA: com ele
-// parado, o servo fica onde estiver - inclusive onde o cerebro o tiver
-// posto com `S`. O log segue a mesma regra do manche.
-void gatilhosNosServos(uint8_t l2, uint8_t r2) {
-  static int dito[2]         = {SERVO_REPOUSO, SERVO_REPOUSO};
-  static uint32_t dito_ms[2] = {0, 0};
-  const uint8_t valor[2]     = {l2, r2};
+  // Um laco mais lento (ponte, gravacao) nao vira um salto do servo.
+  const uint32_t dt = std::min<uint32_t>(millis() - antes_ms, 50);
+  antes_ms          = millis();
+
+  if (centra && !centrava) {
+    alvo[0] = alvo[1] = SERVO_REPOUSO;
+    Serial.println("[ps4] R3: servos ao repouso");
+  }
+  centrava = centra;
+
+  const int v[2] = {rx, ry};
   for (uint8_t i = 0; i < 2; i++) {
-    const int a = corpo::ControlePS4::anguloDoGatilho(valor[i]);
-    if (a != servo_pedido[i]) {
-      servo_pedido[i] = a;
-      servos.angulo(i + 1, a);
+    // O cerebro pode ter posto o servo em outro lugar com `S`: o manche
+    // continua de onde o servo esta, e nao de onde ele o deixou.
+    if (abs((int)lroundf(alvo[i]) - servos.onde(i + 1)) > 1 && !centra) {
+      alvo[i] = servos.onde(i + 1);
     }
-    if (a != dito[i] && (a == SERVO_REPOUSO || millis() - dito_ms[i] >= 150)) {
-      dito[i]    = a;
-      dito_ms[i] = millis();
-      Serial.printf("[ps4] %s: servo %u em %d\n", i == 0 ? "L2" : "R2", (unsigned)(i + 1), a);
-    }
+    alvo[i] =
+        constrain(alvo[i] + sentido[i] * corpo::ControlePS4::passoDoServo(v[i], dt), 0.0f, 180.0f);
+    const int a = (int)lroundf(alvo[i]);
+    if (a != servos.onde(i + 1)) servos.angulo(i + 1, a);
+  }
+  if ((servos.onde(1) != dito[0] || servos.onde(2) != dito[1]) && millis() - dito_ms >= 150) {
+    dito[0] = servos.onde(1);
+    dito[1] = servos.onde(2);
+    dito_ms = millis();
+    Serial.printf("[ps4] manche direito: servo 1 em %d, servo 2 em %d\n", dito[0], dito[1]);
   }
 }
 
@@ -398,25 +416,17 @@ void loop() {
       Serial.printf("[ps4] controle %s\n", conectado ? "conectado" : "DESCONECTADO");
       if (conectado) {
         controle.acende(0, 60, 0);  // verde: o robo esta ouvindo
-      } else {
-        if (controle_dirigindo) {
-          motores.para();  // a mao sumiu no meio do movimento
-          controle_dirigindo = false;
-        }
-        // Gatilho apertado quando a mao sumiu: o servo volta, como
-        // voltaria se ela soltasse.
-        for (uint8_t i = 0; i < 2; i++) {
-          if (servo_pedido[i] != SERVO_REPOUSO) {
-            servo_pedido[i] = SERVO_REPOUSO;
-            servos.angulo(i + 1, SERVO_REPOUSO);
-          }
-        }
+      } else if (controle_dirigindo) {
+        // A mao sumiu no meio do movimento. Os servos ficam onde estao,
+        // como ficariam com o manche direito solto.
+        motores.para();
+        controle_dirigindo = false;
       }
     }
 
     if (conectado && controle.falando()) {
       const corpo::ControlePS4::Mao mao = controle.le();
-      gatilhosNosServos(mao.l2, mao.r2);
+      mancheNosServos(mao.rx, mao.ry, mao.centra);
       xNaCamera(mao.foto);
       if (mao.freio || mao.mexeu) {
         if (mao.freio) {

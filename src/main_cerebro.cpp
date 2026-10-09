@@ -32,6 +32,7 @@
 #include "microfone.h"
 #include "protocolo.h"
 #include "voz.h"
+#include "voz_comandos.h"
 #include "voz_serial.h"
 #include "web_cerebro.h"
 
@@ -44,10 +45,11 @@ cerebro::Camera camera;
 cerebro::VozPorSerial voz;
 cerebro::ConsoleRede console_rede;
 cerebro::WebCerebro web_cerebro;
+cerebro::Ouvidos ouvidos;
 
 // Rede: a de casa (WIFI_SSID) ou, sem ela, a propria do robo.
 String rede_ip;
-String rede_senha_propria;  // vazia quando o robo esta na rede de casa
+bool rede_propria = false;
 
 bool tem_audio  = false;
 bool tem_mic    = false;
@@ -66,6 +68,41 @@ QueueHandle_t do_corpo = nullptr;
 
 void recebeDoCorpo(const char* texto) {
   for (const char* c = texto; *c != '\0'; c++) xQueueSend(do_corpo, c, 0);
+}
+
+// ---- Voz: o texto que o PC ouviu vira ordem ------------------------
+//
+//  O PC (`scripts/ouve.py`) devolve cada frase pelo USB numa linha
+//  `!texto`; quem decide o que ela quer dizer e voz_comandos.h.
+//
+//  CADA ORDEM ANDA POR UM PRAZO E PARA SOZINHA (VOZ_ANDA_MS,
+//  VOZ_VIRA_MS). A fala chega uns 3 s depois de dita - o Whisper leva
+//  esse tempo -, entao um "pare" sempre chegaria tarde: quem para o
+//  robo e o prazo. Tecla de movimento no console cancela o prazo.
+bool voz_andando      = false;
+uint32_t voz_desde_ms = 0;
+uint32_t voz_prazo_ms = 0;
+
+void obedeceVoz(const char* texto) {
+  const cerebro::Ordem o = cerebro::entende(texto);
+  ouvidos.anota(texto, o);
+  Serial.printf("[voz] ouvi \"%s\" -> %s\n", texto, cerebro::nomeDaOrdem(o));
+
+  switch (o) {
+    case cerebro::Ordem::FRENTE: corpo.anda(cerebro::WEB_ANDA, cerebro::WEB_ANDA); break;
+    case cerebro::Ordem::TRAS: corpo.anda(-cerebro::WEB_ANDA, -cerebro::WEB_ANDA); break;
+    case cerebro::Ordem::ESQUERDA: corpo.anda(-cerebro::WEB_VIRA, cerebro::WEB_VIRA); break;
+    case cerebro::Ordem::DIREITA: corpo.anda(cerebro::WEB_VIRA, -cerebro::WEB_VIRA); break;
+    case cerebro::Ordem::PARA: corpo.para(); break;
+    case cerebro::Ordem::NADA: return;  // conversa, nao ordem
+  }
+  voz_andando  = o != cerebro::Ordem::PARA;
+  voz_desde_ms = millis();
+  voz_prazo_ms =
+      (o == cerebro::Ordem::FRENTE || o == cerebro::Ordem::TRAS) ? VOZ_ANDA_MS : VOZ_VIRA_MS;
+  char relato[32];
+  snprintf(relato, sizeof(relato), "voz: %s", cerebro::nomeDaOrdem(o));
+  corpo.relata(relato);
 }
 
 // ---- Sentidos: o microfone, lido sem atrapalhar ninguem ------------
@@ -155,7 +192,9 @@ void ajuda(Print& saida) {
   saida.println("  f          foto: mede um quadro da camera");
   saida.println("  p          foto: tira, guarda para a pagina e despeja em base64");
   saida.println("  o / q      escuta: manda cada frase ouvida para o PC transcrever / para");
-  saida.println("  ?          estado de tudo (mostra a pagina, a rede e a senha dela)");
+  saida.println("  !texto     o que o PC ouviu (scripts/ouve.py): frente, tras, esquerda,");
+  saida.println("             direita, pare - anda um pouco e para sozinho");
+  saida.println("  ?          estado de tudo (mostra a pagina e a rede)");
 }
 
 void estado(Print& saida) {
@@ -185,14 +224,19 @@ void estado(Print& saida) {
   saida.printf("voz:         escuta %s, %lu frases mandadas, fundo %.4f\n",
                voz.ligado() ? "LIGADA" : "desligada (`o` liga)", (unsigned long)voz.frases(),
                voz.fundo());
+  if (ouvidos.quantos() > 0) {
+    saida.printf("             ultima ouvida: \"%s\" -> %s\n", ouvidos.ouvido(0).texto,
+                 cerebro::nomeDaOrdem(ouvidos.ouvido(0).ordem));
+  }
   saida.printf("PSRAM:       %u KB livres de %u KB\n", (unsigned)(ESP.getFreePsram() / 1024),
                (unsigned)(ESP.getPsramSize() / 1024));
   saida.printf("heap:        %u KB livres\n", (unsigned)(ESP.getFreeHeap() / 1024));
   saida.printf("console rede:%s\n", console_rede.descricao().c_str());
   if (web_cerebro.ligado()) {
     saida.printf("pagina:      http://%s/\n", rede_ip.c_str());
-    if (rede_senha_propria.length() > 0) {
-      saida.printf("rede:        \"%s\", senha %s\n", AP_NOME, rede_senha_propria.c_str());
+    if (rede_propria) {
+      saida.printf("rede:        \"%s\", %s\n", AP_NOME,
+                   AP_SENHA[0] != '\0' ? "com a senha de secrets.h" : "aberta, sem senha");
     }
   } else {
     saida.println("pagina:      desligada (sem Wi-Fi)");
@@ -209,22 +253,27 @@ void executaComando(Print& saida, char c) {
   switch (c) {
     case 't': xTaskCreatePinnedToCore(tarefaTeste, "teste", 4096, nullptr, 2, nullptr, 1); break;
     case 'w':
+      voz_andando = false;
       corpo.anda(50, 50);
       saida.println("frente");
       break;
     case 's':
+      voz_andando = false;
       corpo.anda(-50, -50);
       saida.println("re");
       break;
     case 'a':
+      voz_andando = false;
       corpo.anda(-45, 45);
       saida.println("esquerda");
       break;
     case 'd':
+      voz_andando = false;
       corpo.anda(45, -45);
       saida.println("direita");
       break;
     case 'x':
+      voz_andando = false;
       corpo.para();
       saida.println("parar");
       break;
@@ -337,10 +386,9 @@ void setup() {
   // ter configurado nada: e a mesma regra do resto do firmware, falta
   // de segredo nunca tira funcao do robo.
   //
-  // A rede propria tem senha. Sem AP_SENHA em secrets.h ela sai do
-  // endereco da placa ("feijao" + quatro digitos): unica por robo e
-  // fora do repositorio, que e publico - uma senha padrao escrita aqui
-  // seria a senha de todo robo igual a este.
+  // A rede propria e ABERTA, a menos que secrets.h defina AP_SENHA: o
+  // celular entra direto (pedido do Henrique, 08/10/2026). Quem esta ao
+  // alcance ve a camera e dirige - ver config_cerebro_xiao.h.
   bool na_rede = false;
   if (WIFI_SSID[0] != '\0') {
     WiFi.mode(WIFI_STA);
@@ -356,23 +404,18 @@ void setup() {
     if (na_rede) rede_ip = WiFi.localIP().toString();
   }
   if (!na_rede) {
-    if (AP_SENHA[0] != '\0') {
-      rede_senha_propria = AP_SENHA;
-    } else {
-      char senha[16];
-      snprintf(senha, sizeof(senha), "feijao%04x", (unsigned)(ESP.getEfuseMac() >> 32) & 0xffff);
-      rede_senha_propria = senha;
-    }
     WiFi.mode(WIFI_AP);
-    na_rede = WiFi.softAP(AP_NOME, rede_senha_propria.c_str());
+    // Senha vazia (nullptr) e rede aberta.
+    na_rede      = WiFi.softAP(AP_NOME, AP_SENHA[0] != '\0' ? AP_SENHA : nullptr);
+    rede_propria = na_rede;
     if (na_rede) rede_ip = WiFi.softAPIP().toString();
   }
   if (na_rede) {
     console_rede.begin();
-    web_cerebro.begin(&camera, &corpo);
-    if (rede_senha_propria.length() > 0) {
-      Serial.printf("[cerebro] rede propria \"%s\", senha %s\n", AP_NOME,
-                    rede_senha_propria.c_str());
+    web_cerebro.begin(&camera, &corpo, &ouvidos);
+    if (rede_propria) {
+      Serial.printf("[cerebro] rede propria \"%s\", %s\n", AP_NOME,
+                    AP_SENHA[0] != '\0' ? "com a senha de secrets.h" : "aberta, sem senha");
     }
     Serial.printf("[cerebro] pagina em http://%s/ - console em telnet %s %u\n", rede_ip.c_str(),
                   rede_ip.c_str(), (unsigned)cerebro::ConsoleRedePorta);
@@ -388,8 +431,37 @@ void setup() {
 
 void loop() {
   // ---- Console pela serial ----------------------------------------
+  // Tecla solta e comando de uma letra. Linha que comeca com '!' e o
+  // texto que o PC ouviu: vai inteira para a voz. Linha que nao fecha em
+  // meio segundo e descartada, para nao engolir as teclas seguintes.
+  static char frase[128];
+  static size_t na_frase      = 0;
+  static bool lendo_frase     = false;
+  static uint32_t frase_desde = 0;
+  if (lendo_frase && millis() - frase_desde > 500) lendo_frase = false;
   while (Serial.available()) {
-    executaComando(Serial, (char)Serial.read());
+    const char c = (char)Serial.read();
+    if (lendo_frase) {
+      if (c == '\n' || c == '\r') {
+        frase[na_frase] = '\0';
+        lendo_frase     = false;
+        obedeceVoz(frase);
+      } else if (na_frase < sizeof(frase) - 1) {
+        frase[na_frase++] = c;
+      }
+    } else if (c == '!') {
+      lendo_frase = true;
+      na_frase    = 0;
+      frase_desde = millis();
+    } else {
+      executaComando(Serial, c);
+    }
+  }
+
+  // ---- O prazo da ultima ordem de voz -------------------------------
+  if (voz_andando && millis() - voz_desde_ms >= voz_prazo_ms) {
+    corpo.para();
+    voz_andando = false;
   }
 
   // ---- Console vindo do corpo ---------------------------------------
