@@ -1,3 +1,5 @@
+> **Em pausa** — o desenvolvimento continua no Jaspy, onde esta base vira as pernas. O estado daqui está congelado na tag `pausa-2026-10`.
+
 # Feijão com Farinha
 
 Robô móvel que anda, ouve e vê — e que se dirige pelo controle de PS4 ou pelo
